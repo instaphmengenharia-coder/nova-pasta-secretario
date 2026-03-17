@@ -4,8 +4,6 @@ import { useClaudeAI } from './hooks/useClaudeAI'
 import { useML } from './hooks/useML'
 import TaskCard from './components/TaskCard'
 
-// ─── Course color palette ─────────────────────────────────────────────────────
-
 const COURSE_COLORS = [
   '#1a73e8','#e91e63','#9c27b0','#ff5722',
   '#4caf50','#009688','#ff9800','#795548',
@@ -19,8 +17,6 @@ function getCourseColor(courseId = '') {
   return COURSE_COLORS[Math.abs(hash) % COURSE_COLORS.length]
 }
 
-// ─── Deadline grouping ────────────────────────────────────────────────────────
-
 function groupByDeadline(tasks) {
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -30,11 +26,11 @@ function groupByDeadline(tasks) {
   const groups = { overdue: [], noDate: [], thisWeek: [], nextWeek: [], later: [] }
 
   for (const t of tasks) {
-    if (!t.dueDate)              groups.noDate.push(t)
+    if (!t.dueDate)                  groups.noDate.push(t)
     else if (t.dueDate < todayStart) groups.overdue.push(t)
-    else if (t.dueDate <= in7)   groups.thisWeek.push(t)
-    else if (t.dueDate <= in14)  groups.nextWeek.push(t)
-    else                         groups.later.push(t)
+    else if (t.dueDate <= in7)       groups.thisWeek.push(t)
+    else if (t.dueDate <= in14)      groups.nextWeek.push(t)
+    else                             groups.later.push(t)
   }
   return groups
 }
@@ -46,8 +42,6 @@ const GROUP_DEFS = [
   { key: 'later',    label: 'Depois' },
   { key: 'noDate',   label: 'Sem data de entrega' },
 ]
-
-// ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const {
@@ -66,12 +60,13 @@ export default function App() {
     submissionCount, clearMLData,
   } = useML()
 
-  const [tab, setTab] = useState('ASSIGNED')       // ASSIGNED | DONE
+  const [tab, setTab]                   = useState('ASSIGNED')
   const [courseFilter, setCourseFilter] = useState('')
-  const [search, setSearch] = useState('')
-  const [showSearch, setShowSearch] = useState(false)
+  const [search, setSearch]             = useState('')
+  const [showSearch, setShowSearch]     = useState(false)
   const [showAnnouncements, setShowAnnouncements] = useState(false)
-  const [openGroups, setOpenGroups] = useState({ overdue: true, thisWeek: true, nextWeek: true, later: true, noDate: false })
+  const [openGroups, setOpenGroups]     = useState({ overdue: true, thisWeek: true, nextWeek: true, later: true, noDate: false })
+  const [dark, setDark]                 = useState(() => localStorage.getItem('se_dark') === '1')
 
   const [solutions, setSolutions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('se_solutions') || '{}') } catch { return {} }
@@ -84,11 +79,49 @@ export default function App() {
     })
   }
 
-  const [resolveAllOpen, setResolveAllOpen] = useState(false)
+  const [resolveAllOpen, setResolveAllOpen]       = useState(false)
   const [resolveAllProgress, setResolveAllProgress] = useState({ done: 0, total: 0, current: '' })
   const [resolveAllRunning, setResolveAllRunning] = useState(false)
   const resolveAllAbortRef = useRef(false)
   const prevTasksRef       = useRef([])
+
+  // ── Dark mode ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+    localStorage.setItem('se_dark', dark ? '1' : '0')
+  }, [dark])
+
+  // ── Notifications: request permission on login ─────────────────────────────
+  useEffect(() => {
+    if (isAuthenticated && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [isAuthenticated])
+
+  // ── Notifications: alert for tasks due in < 24h or overdue ────────────────
+  useEffect(() => {
+    if (!isAuthenticated || tasks.length === 0) return
+    if (!('Notification' in window) || Notification.permission !== 'granted') return
+
+    const notified = new Set(JSON.parse(sessionStorage.getItem('se_notified') || '[]'))
+    const toNotify = tasks.filter(t => {
+      if (t.status === 'TURNED_IN' || notified.has(t.id) || !t.dueDate) return false
+      return t.dueDate - new Date() < 24 * 3600000
+    })
+
+    toNotify.forEach(t => {
+      const diff = t.dueDate - new Date()
+      const label = diff <= 0
+        ? '⚠️ Atrasada'
+        : `⏱ Faltam ${Math.max(1, Math.round(diff / 3600000))}h`
+      new Notification(`${label}: ${t.title}`, { body: t.courseName })
+      notified.add(t.id)
+    })
+
+    if (toNotify.length > 0) {
+      sessionStorage.setItem('se_notified', JSON.stringify([...notified]))
+    }
+  }, [tasks])
 
   const handleResolveAll = async () => {
     const pending = tasks.filter((t) => t.status !== 'TURNED_IN' && !solutions[t.id])
@@ -118,16 +151,14 @@ export default function App() {
       analyzePriorities(tasks)
   }, [isAuthenticated, tasks.length])
 
-  // Auto-classify pending tasks that have no cached difficulty yet
   useEffect(() => {
     if (!isAuthenticated || tasks.length === 0) return
     const unclassified = tasks.filter(
       (t) => t.status !== 'TURNED_IN' && difficulty[t.id] === undefined,
     )
     if (unclassified.length > 0) classifyBatch(unclassified)
-  }, [isAuthenticated, tasks.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, tasks.length])
 
-  // Detect NEW→TURNED_IN transitions and record submission timing
   useEffect(() => {
     const prev = prevTasksRef.current
     if (prev.length > 0 && tasks.length > 0) {
@@ -140,9 +171,8 @@ export default function App() {
     prevTasksRef.current = tasks
   }, [tasks])
 
-  // Derived lists
-  const assignedTasks = tasks.filter((t) => t.status !== 'TURNED_IN')
-  const doneTasks     = tasks.filter((t) => t.status === 'TURNED_IN')
+  const assignedTasks   = tasks.filter((t) => t.status !== 'TURNED_IN')
+  const doneTasks       = tasks.filter((t) => t.status === 'TURNED_IN')
 
   const applyFilters = (list) => list.filter((t) => {
     if (courseFilter && t.courseId !== courseFilter) return false
@@ -156,7 +186,6 @@ export default function App() {
   const visibleAssigned = applyFilters(assignedTasks)
   const visibleDone     = applyFilters(doneTasks)
 
-  // Sort each deadline group by ML priority score (highest first)
   const rawGroups = groupByDeadline(visibleAssigned)
   const groups    = Object.fromEntries(
     Object.entries(rawGroups).map(([key, arr]) => [key, sortByPriority(arr)]),
@@ -164,7 +193,7 @@ export default function App() {
 
   const toggleGroup = (key) => setOpenGroups((p) => ({ ...p, [key]: !p[key] }))
 
-  // ── Login screen ─────────────────────────────────────────────────────────────
+  // ── Login ──────────────────────────────────────────────────────────────────
   if (!isAuthenticated) {
     return (
       <div style={s.loginPage}>
@@ -185,7 +214,6 @@ export default function App() {
     )
   }
 
-  // ── Authenticated ─────────────────────────────────────────────────────────────
   return (
     <div style={s.app}>
       {/* Header */}
@@ -213,6 +241,9 @@ export default function App() {
             )}
             <button style={s.iconBtn} title="Pesquisar" onClick={() => { setShowSearch(!showSearch); setSearch('') }}>⌕</button>
             <button style={s.iconBtn} title="Atualizar" onClick={refresh} disabled={loading}>{loading ? '…' : '↺'}</button>
+            <button style={s.iconBtn} title={dark ? 'Modo claro' : 'Modo escuro'} onClick={() => setDark(!dark)}>
+              {dark ? '☀' : '🌙'}
+            </button>
             {user && (
               <div style={s.userInfo}>
                 {user.photo
@@ -362,7 +393,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Assigned tab: grouped ── */}
+        {/* Assigned tab */}
         {tab === 'ASSIGNED' && (
           <div style={s.groupsContainer}>
             {GROUP_DEFS.map(({ key, label }) => {
@@ -377,12 +408,12 @@ export default function App() {
                         ...s.groupCount,
                         color: items.length > 0
                           ? (key === 'overdue' ? '#ea4335' : '#1a73e8')
-                          : '#9aa0a6',
+                          : 'var(--se-t4)',
                         fontWeight: items.length > 0 ? 700 : 400,
                       }}>
                         {items.length}
                       </span>
-                      <span style={{ ...s.chevron, color: '#5f6368' }}>{isOpen ? '▲' : '▼'}</span>
+                      <span style={{ ...s.chevron, color: 'var(--se-t4)' }}>{isOpen ? '▲' : '▼'}</span>
                     </div>
                   </button>
                   <div style={s.groupDivider} />
@@ -420,7 +451,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Done tab ── */}
+        {/* Done tab */}
         {tab === 'DONE' && (
           <div style={s.groupsContainer}>
             {visibleDone.length === 0 && !loading ? (
@@ -494,7 +525,7 @@ export default function App() {
                     }}>
                       Limpar respostas salvas
                     </button>
-                    <button style={s.clearCacheBtn} onClick={clearMLData} title="Apaga dificuldades, histórico e padrões">
+                    <button style={s.clearCacheBtn} onClick={clearMLData}>
                       Limpar dados ML
                     </button>
                   </div>
@@ -563,19 +594,19 @@ const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 const s = {
   loginPage: {
     minHeight: '100vh', display: 'flex', alignItems: 'center',
-    justifyContent: 'center', padding: 20, background: '#f1f3f4',
+    justifyContent: 'center', padding: 20, background: 'var(--se-bg)',
   },
   loginCard: {
-    background: '#fff', borderRadius: 12, padding: '48px 40px', textAlign: 'center',
+    background: 'var(--se-surface)', borderRadius: 12, padding: '48px 40px', textAlign: 'center',
     maxWidth: 400, width: '100%', boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
     display: 'flex', flexDirection: 'column', alignItems: 'center',
   },
   loginTitle: {
-    fontSize: 24, color: '#202124', fontFamily: FONT, fontWeight: 600,
+    fontSize: 24, color: 'var(--se-t1)', fontFamily: FONT, fontWeight: 600,
     marginBottom: 8, marginTop: 16,
   },
   loginSub: {
-    fontSize: 14, color: '#5f6368', lineHeight: 1.6, marginBottom: 32, fontFamily: FONT,
+    fontSize: 14, color: 'var(--se-t3)', lineHeight: 1.6, marginBottom: 32, fontFamily: FONT,
   },
   googleBtn: {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -584,13 +615,12 @@ const s = {
     fontSize: 14, fontWeight: 500, cursor: 'pointer', fontFamily: FONT,
     boxShadow: '0 2px 6px rgba(26,115,232,0.4)', marginBottom: 12,
   },
-  loginHint: { fontSize: 12, color: '#9aa0a6', fontFamily: FONT },
+  loginHint: { fontSize: 12, color: 'var(--se-t4)', fontFamily: FONT },
 
-  app: { minHeight: '100vh', background: '#f1f3f4', fontFamily: FONT, color: '#202124' },
+  app: { minHeight: '100vh', background: 'var(--se-bg)', fontFamily: FONT, color: 'var(--se-t1)' },
 
-  // Header
   header: {
-    background: '#fff', borderBottom: '1px solid #e0e0e0',
+    background: 'var(--se-surface)', borderBottom: '1px solid var(--se-divider)',
     position: 'sticky', top: 0, zIndex: 100,
     boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
   },
@@ -598,27 +628,23 @@ const s = {
     maxWidth: 900, margin: '0 auto', padding: '0 20px',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 56,
   },
-  headerLeft: { display: 'flex', alignItems: 'center', gap: 10 },
-  headerTitle: { fontSize: 16, fontWeight: 600, color: '#202124' },
+  headerLeft:  { display: 'flex', alignItems: 'center', gap: 10 },
+  headerTitle: { fontSize: 16, fontWeight: 600, color: 'var(--se-t1)' },
   headerRight: { display: 'flex', alignItems: 'center', gap: 6 },
 
-  searchWrap: {
-    position: 'relative', display: 'flex', alignItems: 'center',
-  },
-  searchIcon: {
-    position: 'absolute', left: 10, fontSize: 16, color: '#9aa0a6', pointerEvents: 'none',
-  },
+  searchWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
+  searchIcon: { position: 'absolute', left: 10, fontSize: 16, color: 'var(--se-t4)', pointerEvents: 'none' },
   searchInput: {
     width: 220, padding: '7px 30px 7px 28px',
-    background: '#f1f3f4', border: '1px solid #dadce0',
-    borderRadius: 24, color: '#202124', fontSize: 14, fontFamily: FONT, outline: 'none',
+    background: 'var(--se-input)', border: '1px solid var(--se-border2)',
+    borderRadius: 24, color: 'var(--se-t1)', fontSize: 14, fontFamily: FONT, outline: 'none',
   },
   searchClear: {
     position: 'absolute', right: 8, background: 'none', border: 'none',
-    color: '#9aa0a6', cursor: 'pointer', fontSize: 12, padding: 2,
+    color: 'var(--se-t4)', cursor: 'pointer', fontSize: 12, padding: 2,
   },
   iconBtn: {
-    background: 'none', border: 'none', color: '#5f6368',
+    background: 'none', border: 'none', color: 'var(--se-t3)',
     width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
     fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
   },
@@ -630,50 +656,47 @@ const s = {
     color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
   },
   signOutBtn: {
-    background: 'none', border: '1px solid #dadce0',
-    color: '#3c4043', borderRadius: 6, padding: '5px 12px',
+    background: 'none', border: '1px solid var(--se-border2)',
+    color: 'var(--se-t2)', borderRadius: 6, padding: '5px 12px',
     cursor: 'pointer', fontSize: 13, fontFamily: FONT,
   },
 
-  // Tabs
   tabRow: {
     maxWidth: 900, margin: '0 auto', padding: '0 20px',
-    display: 'flex', gap: 0, borderTop: '1px solid #f1f3f4',
+    display: 'flex', gap: 0, borderTop: '1px solid var(--se-sep)',
   },
   tab: (active) => ({
     padding: '12px 20px', background: 'none', border: 'none',
     borderBottom: active ? '3px solid #1a73e8' : '3px solid transparent',
-    color: active ? '#1a73e8' : '#5f6368',
+    color: active ? '#1a73e8' : 'var(--se-t3)',
     fontWeight: active ? 600 : 400, fontSize: 14, cursor: 'pointer',
     display: 'flex', alignItems: 'center', gap: 8, fontFamily: FONT,
     transition: 'color 0.15s',
   }),
   tabCount: (active) => ({
-    background: active ? '#e8f0fe' : '#f1f3f4',
-    color: active ? '#1a73e8' : '#9aa0a6',
+    background: active ? '#e8f0fe' : 'var(--se-input)',
+    color: active ? '#1a73e8' : 'var(--se-t4)',
     fontSize: 11, padding: '1px 7px', borderRadius: 20, fontWeight: 600,
   }),
 
   main: { maxWidth: 900, margin: '0 auto', padding: '20px 20px 60px' },
 
-  loadingBanner: { display: 'flex', alignItems: 'center', color: '#5f6368', fontSize: 14, marginBottom: 16 },
+  loadingBanner: { display: 'flex', alignItems: 'center', color: 'var(--se-t3)', fontSize: 14, marginBottom: 16 },
   errorAlert: {
     background: '#fce8e6', border: '1px solid #f28b82',
     color: '#c5221f', borderRadius: 8, padding: '12px 16px', fontSize: 14, marginBottom: 16,
   },
 
-  // Toolbar
   toolbar: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     marginBottom: 16, gap: 10, flexWrap: 'wrap',
   },
-  toolbarLeft: { display: 'flex', gap: 8, alignItems: 'center' },
+  toolbarLeft:  { display: 'flex', gap: 8, alignItems: 'center' },
   toolbarRight: { display: 'flex', gap: 8 },
   courseSelect: {
-    padding: '8px 14px', border: '1px solid #dadce0', borderRadius: 6,
-    background: '#fff', color: '#3c4043', fontSize: 14, fontFamily: FONT,
-    cursor: 'pointer', outline: 'none',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+    padding: '8px 14px', border: '1px solid var(--se-border2)', borderRadius: 6,
+    background: 'var(--se-surface)', color: 'var(--se-t2)', fontSize: 14, fontFamily: FONT,
+    cursor: 'pointer', outline: 'none', boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
   },
   resolveAllBtn: {
     background: '#1a73e8', border: 'none', borderRadius: 6,
@@ -681,30 +704,28 @@ const s = {
     fontWeight: 500, boxShadow: '0 1px 4px rgba(26,115,232,0.35)',
   },
 
-  // AI panel
   aiPanel: {
-    background: '#fff', border: '1px solid #e8eaed', borderRadius: 10,
-    padding: '14px 18px', marginBottom: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+    background: 'var(--se-surface)', border: '1px solid var(--se-border)',
+    borderRadius: 10, padding: '14px 18px', marginBottom: 16,
+    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
   },
-  aiPanelHeader: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8,
-  },
+  aiPanelHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   aiPanelTitleRow: { display: 'flex', alignItems: 'center', gap: 7 },
-  aiPanelIcon: { fontSize: 14, color: '#1a73e8' },
+  aiPanelIcon:  { fontSize: 14, color: '#1a73e8' },
   aiPanelLabel: { fontSize: 13, color: '#1a73e8', fontWeight: 600 },
   reanalyzeBtn: {
-    background: 'none', border: '1px solid #dadce0',
-    color: '#5f6368', borderRadius: 20, padding: '3px 12px', fontSize: 12, cursor: 'pointer',
+    background: 'none', border: '1px solid var(--se-border2)',
+    color: 'var(--se-t3)', borderRadius: 20, padding: '3px 12px', fontSize: 12, cursor: 'pointer',
   },
-  aiLoading: { display: 'flex', alignItems: 'center', color: '#5f6368', fontSize: 14 },
-  aiText: { color: '#3c4043', fontSize: 14, lineHeight: 1.7 },
-  aiError: { color: '#c5221f', fontSize: 13 },
-  aiPlaceholder: { color: '#9aa0a6', fontSize: 13, fontStyle: 'italic' },
+  aiLoading:     { display: 'flex', alignItems: 'center', color: 'var(--se-t3)', fontSize: 14 },
+  aiText:        { color: 'var(--se-t2)', fontSize: 14, lineHeight: 1.7 },
+  aiError:       { color: '#c5221f', fontSize: 13 },
+  aiPlaceholder: { color: 'var(--se-t4)', fontSize: 13, fontStyle: 'italic' },
 
-  // Announcements
   annPanel: {
-    background: '#fff', border: '1px solid #e8eaed', borderRadius: 10,
-    marginBottom: 16, overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+    background: 'var(--se-surface)', border: '1px solid var(--se-border)',
+    borderRadius: 10, marginBottom: 16, overflow: 'hidden',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
   },
   annToggle: {
     display: 'flex', alignItems: 'center', gap: 10, width: '100%',
@@ -713,22 +734,17 @@ const s = {
   },
   annToggleText: {
     display: 'flex', alignItems: 'center', gap: 8, flex: 1,
-    color: '#3c4043', fontSize: 14, fontWeight: 500,
+    color: 'var(--se-t2)', fontSize: 14, fontWeight: 500,
   },
-  annCount: {
-    background: '#f1f3f4', color: '#5f6368', fontSize: 11, padding: '1px 7px', borderRadius: 20,
-  },
-  chevron: { color: '#9aa0a6', fontSize: 11 },
-  annList: { borderTop: '1px solid #e8eaed', display: 'flex', flexDirection: 'column' },
-  annItem: { padding: '12px 18px', borderBottom: '1px solid #f1f3f4' },
-  annItemTop: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4,
-  },
-  annDate: { fontSize: 11, color: '#9aa0a6' },
-  annText: { fontSize: 13, color: '#3c4043', lineHeight: 1.6, marginBottom: 4 },
-  annLink: { fontSize: 12, color: '#1a73e8', textDecoration: 'none' },
+  annCount: { background: 'var(--se-input)', color: 'var(--se-t3)', fontSize: 11, padding: '1px 7px', borderRadius: 20 },
+  chevron:  { color: 'var(--se-t4)', fontSize: 11 },
+  annList:  { borderTop: '1px solid var(--se-border)', display: 'flex', flexDirection: 'column' },
+  annItem:  { padding: '12px 18px', borderBottom: '1px solid var(--se-sep)' },
+  annItemTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  annDate:  { fontSize: 11, color: 'var(--se-t4)' },
+  annText:  { fontSize: 13, color: 'var(--se-t2)', lineHeight: 1.6, marginBottom: 4 },
+  annLink:  { fontSize: 12, color: '#1a73e8', textDecoration: 'none' },
 
-  // Groups (Classroom style)
   groupsContainer: { display: 'flex', flexDirection: 'column', gap: 0 },
   group: { marginBottom: 0 },
   groupHeader: {
@@ -736,47 +752,40 @@ const s = {
     width: '100%', background: 'none', border: 'none',
     padding: '16px 4px 10px', cursor: 'pointer', textAlign: 'left',
   },
-  groupLabel: { fontSize: 16, color: '#202124', fontWeight: 400 },
+  groupLabel: { fontSize: 16, color: 'var(--se-t1)', fontWeight: 400 },
   groupRight: { display: 'flex', alignItems: 'center', gap: 12 },
   groupCount: { fontSize: 16 },
-  groupDivider: { height: 1, background: '#e0e0e0', marginBottom: 0 },
-  groupItems: {
-    display: 'flex', flexDirection: 'column',
-    gap: 0, paddingBottom: 8,
-  },
-  groupEmpty: { padding: '12px 0', color: '#9aa0a6', fontSize: 13 },
+  groupDivider: { height: 1, background: 'var(--se-divider)', marginBottom: 0 },
+  groupItems:   { display: 'flex', flexDirection: 'column', gap: 0, paddingBottom: 8 },
+  groupEmpty:   { padding: '12px 0', color: 'var(--se-t4)', fontSize: 13 },
 
   emptyState: { textAlign: 'center', padding: '60px 0' },
-  emptyIcon: { fontSize: 36, marginBottom: 10, color: '#9aa0a6' },
-  emptyText: { color: '#9aa0a6', fontSize: 14 },
+  emptyIcon:  { fontSize: 36, marginBottom: 10, color: 'var(--se-t4)' },
+  emptyText:  { color: 'var(--se-t4)', fontSize: 14 },
 
-  // Resolve-all modal
   overlay: {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
     zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
   },
   resolveAllModal: {
-    background: '#fff', borderRadius: 12, width: '100%', maxWidth: 480,
+    background: 'var(--se-surface)', borderRadius: 12, width: '100%', maxWidth: 480,
     boxShadow: '0 8px 40px rgba(0,0,0,0.2)',
   },
   resolveAllHeader: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '20px 24px 16px', borderBottom: '1px solid #e8eaed',
+    padding: '20px 24px 16px', borderBottom: '1px solid var(--se-border)',
   },
-  resolveAllTitle: { fontSize: 17, color: '#202124', fontWeight: 600 },
+  resolveAllTitle: { fontSize: 17, color: 'var(--se-t1)', fontWeight: 600 },
   closeBtn: {
-    background: 'none', border: 'none', color: '#9aa0a6', fontSize: 18, cursor: 'pointer', padding: '4px 8px',
+    background: 'none', border: 'none', color: 'var(--se-t4)', fontSize: 18, cursor: 'pointer', padding: '4px 8px',
   },
-  resolveAllBody: { padding: '20px 24px 24px' },
-  progressBar: { height: 4, background: '#e8eaed', borderRadius: 10, marginBottom: 10, overflow: 'hidden' },
-  progressFill: { height: '100%', background: '#1a73e8', borderRadius: 10, transition: 'width 0.4s ease' },
-  progressText: { color: '#3c4043', fontSize: 14, marginBottom: 4 },
-  progressCurrent: {
-    color: '#9aa0a6', fontSize: 12, fontStyle: 'italic', marginBottom: 16,
-    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-  },
-  progressDone: { color: '#34a853', fontSize: 14, marginBottom: 16 },
-  resolveAllInfo: { color: '#5f6368', fontSize: 14, lineHeight: 1.6, marginBottom: 16 },
+  resolveAllBody:  { padding: '20px 24px 24px' },
+  progressBar:     { height: 4, background: 'var(--se-border)', borderRadius: 10, marginBottom: 10, overflow: 'hidden' },
+  progressFill:    { height: '100%', background: '#1a73e8', borderRadius: 10, transition: 'width 0.4s ease' },
+  progressText:    { color: 'var(--se-t2)', fontSize: 14, marginBottom: 4 },
+  progressCurrent: { color: 'var(--se-t4)', fontSize: 12, fontStyle: 'italic', marginBottom: 16, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  progressDone:    { color: '#34a853', fontSize: 14, marginBottom: 16 },
+  resolveAllInfo:  { color: 'var(--se-t3)', fontSize: 14, lineHeight: 1.6, marginBottom: 16 },
   resolveAllStartBtn: {
     background: '#1a73e8', border: 'none', borderRadius: 6,
     color: '#fff', padding: '10px 20px', fontSize: 14, cursor: 'pointer', fontWeight: 500,
@@ -786,8 +795,8 @@ const s = {
     color: '#c5221f', borderRadius: 6, padding: '8px 20px', fontSize: 13, cursor: 'pointer',
   },
   clearCacheBtn: {
-    background: 'none', border: '1px solid #dadce0',
-    color: '#5f6368', borderRadius: 6, padding: '10px 16px', fontSize: 12, cursor: 'pointer',
+    background: 'none', border: '1px solid var(--se-border2)',
+    color: 'var(--se-t3)', borderRadius: 6, padding: '10px 16px', fontSize: 12, cursor: 'pointer',
   },
 }
 
@@ -795,11 +804,40 @@ if (typeof document !== 'undefined' && !document.getElementById('app-styles')) {
   const el = document.createElement('style')
   el.id = 'app-styles'
   el.textContent = `
-    @keyframes spin { to { transform: rotate(360deg); } }
+    :root {
+      --se-bg: #f1f3f4;
+      --se-surface: #ffffff;
+      --se-surface2: #f8f9fa;
+      --se-input: #f1f3f4;
+      --se-border: #e8eaed;
+      --se-border2: #dadce0;
+      --se-divider: #e0e0e0;
+      --se-sep: #f1f3f4;
+      --se-t1: #202124;
+      --se-t2: #3c4043;
+      --se-t3: #5f6368;
+      --se-t4: #9aa0a6;
+    }
+    html.dark {
+      --se-bg: #111111;
+      --se-surface: #1e1e1e;
+      --se-surface2: #252525;
+      --se-input: #292929;
+      --se-border: #363636;
+      --se-border2: #363636;
+      --se-divider: #2d2d2d;
+      --se-sep: #252525;
+      --se-t1: #e8eaed;
+      --se-t2: #bdc1c6;
+      --se-t3: #9aa0a6;
+      --se-t4: #5f6368;
+    }
+    @keyframes spin  { to { transform: rotate(360deg); } }
     @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    input::placeholder { color: #9aa0a6; }
+    input::placeholder { color: var(--se-t4); }
     select { appearance: auto; }
+    select option { background: var(--se-surface); color: var(--se-t1); }
   `
   document.head.appendChild(el)
 }

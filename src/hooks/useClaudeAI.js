@@ -154,10 +154,30 @@ Escreva APENAS a resposta final, pronta para ser colada no campo de entrega do G
     return callClaude(prompt)
   }, [])
 
+  /**
+   * Refines an existing answer based on a user instruction.
+   * Returns the updated answer text directly.
+   */
+  const refineAnswer = useCallback(async (currentAnswer, instruction) => {
+    const prompt = `Você é um assistente escolar. Abaixo está uma resposta já escrita para uma atividade escolar e um pedido de alteração do aluno.
+
+RESPOSTA ATUAL:
+${currentAnswer}
+
+PEDIDO DO ALUNO:
+${instruction}
+
+Reescreva a resposta aplicando o pedido do aluno. Mantenha o conteúdo correto e o estilo de estudante brasileiro.
+PROIBIDO: Não escreva preâmbulos como "Claro!", "Aqui está:", etc. Retorne APENAS a resposta reescrita, pronta para entregar.`
+
+    return callClaude(prompt)
+  }, [])
+
   return {
     analyzePriorities,
     analyzeTask,
     solveTask,
+    refineAnswer,
     dashboardAnalysis,
     dashboardLoading,
     dashboardError,
