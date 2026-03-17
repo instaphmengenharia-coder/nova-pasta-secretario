@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(claude mcp:*)",
+      "Bash(cmd /c claude mcp list)",
+      "Bash(cmd /c \"claude mcp list\")",
+      "Bash(cmd /c \"claude mcp add --transport stdio playwright -- cmd /c npx -y @playwright/mcp@latest\")",
+      "Bash(cmd /c \"type %USERPROFILE%\\\\.claude.json\")",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_tabs",
+      "mcp__playwright__browser_select_option",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_press_key",
+      "mcp__playwright__browser_resize",
+      "Bash(ls -la \"c:\\\\Users\\\\joaop\\\\Nova pasta\"\"*.png 2>/dev/null || dir /b \"c:UsersjoaopNova pasta*.png \")",
+      "mcp__playwright__browser_file_upload",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5174/)"
+    ]
+  }
+}
