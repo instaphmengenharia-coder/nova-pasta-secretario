@@ -51,6 +51,7 @@ export default function App() {
 
   const {
     analyzePriorities, dashboardAnalysis, dashboardLoading, dashboardError, solveTask,
+    generateWeeklyPlan, weeklyPlan, weeklyPlanLoading, weeklyPlanError,
   } = useClaudeAI()
 
   const {
@@ -67,6 +68,9 @@ export default function App() {
   const [showAnnouncements, setShowAnnouncements] = useState(false)
   const [openGroups, setOpenGroups]     = useState({ overdue: true, thisWeek: true, nextWeek: true, later: true, noDate: false })
   const [dark, setDark]                 = useState(() => localStorage.getItem('se_dark') === '1')
+  const [whatsappPhone, setWhatsappPhone] = useState(() => localStorage.getItem('se_phone') || '')
+  const [showPhoneInput, setShowPhoneInput] = useState(false)
+  const [phoneInputVal, setPhoneInputVal] = useState(() => localStorage.getItem('se_phone') || '')
 
   const [solutions, setSolutions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('se_solutions') || '{}') } catch { return {} }
@@ -75,6 +79,19 @@ export default function App() {
     setSolutions((prev) => {
       const next = { ...prev, [taskId]: text }
       localStorage.setItem('se_solutions', JSON.stringify(next))
+      return next
+    })
+  }
+
+  // Style examples: up to 3 recent approved answers used as writing style context
+  const [styleExamples, setStyleExamples] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('se_style') || '[]') } catch { return [] }
+  })
+  const saveStyleExample = ({ task: taskTitle, answer }) => {
+    setStyleExamples((prev) => {
+      const filtered = prev.filter((e) => e.task !== taskTitle)
+      const next = [{ task: taskTitle, answer: answer.slice(0, 600) }, ...filtered].slice(0, 3)
+      localStorage.setItem('se_style', JSON.stringify(next))
       return next
     })
   }
@@ -244,6 +261,13 @@ export default function App() {
             <button style={s.iconBtn} title={dark ? 'Modo claro' : 'Modo escuro'} onClick={() => setDark(!dark)}>
               {dark ? '☀' : '🌙'}
             </button>
+            <button
+              style={{ ...s.iconBtn, color: whatsappPhone ? '#25d366' : 'var(--se-t3)' }}
+              title="Configurar WhatsApp"
+              onClick={() => setShowPhoneInput(!showPhoneInput)}
+            >
+              📱
+            </button>
             {user && (
               <div style={s.userInfo}>
                 {user.photo
@@ -258,16 +282,44 @@ export default function App() {
 
         {/* Tabs */}
         <div style={s.tabRow}>
-          {[['ASSIGNED', 'Atribuídas'], ['DONE', 'Concluídas']].map(([key, label]) => (
+          {[['ASSIGNED', 'Atribuídas'], ['DONE', 'Concluídas'], ['PLAN', 'Plano Semanal']].map(([key, label]) => (
             <button key={key} style={s.tab(tab === key)} onClick={() => setTab(key)}>
               {label}
-              <span style={s.tabCount(tab === key)}>
-                {key === 'ASSIGNED' ? assignedTasks.length : doneTasks.length}
-              </span>
+              {key !== 'PLAN' && (
+                <span style={s.tabCount(tab === key)}>
+                  {key === 'ASSIGNED' ? assignedTasks.length : doneTasks.length}
+                </span>
+              )}
             </button>
           ))}
         </div>
       </header>
+
+      {showPhoneInput && (
+        <div style={s.phoneBanner}>
+          <span style={s.phoneBannerLabel}>📱 Número WhatsApp (com DDD, sem espaços):</span>
+          <input
+            style={s.phoneInput}
+            type="tel"
+            placeholder="Ex: 5531998202726"
+            value={phoneInputVal}
+            onChange={e => setPhoneInputVal(e.target.value)}
+          />
+          <button style={s.phoneSaveBtn} onClick={() => {
+            localStorage.setItem('se_phone', phoneInputVal)
+            setWhatsappPhone(phoneInputVal)
+            setShowPhoneInput(false)
+          }}>Salvar</button>
+          {whatsappPhone && (
+            <button style={s.phoneClearBtn} onClick={() => {
+              localStorage.removeItem('se_phone')
+              setWhatsappPhone('')
+              setPhoneInputVal('')
+              setShowPhoneInput(false)
+            }}>Remover</button>
+          )}
+        </div>
+      )}
 
       <main style={s.main}>
         {error && <div style={s.errorAlert}>{error}</div>}
@@ -428,8 +480,11 @@ export default function App() {
                           courseColor={getCourseColor(task.courseId)}
                           cachedSolution={solutions[task.id] || null}
                           onSolutionSaved={(text) => saveSolution(task.id, text)}
+                          onSolutionCopied={saveStyleExample}
+                          styleExamples={styleExamples}
                           difficulty={difficulty[task.id] ?? null}
                           classifyingDifficulty={classifying.has(task.id)}
+                          whatsappPhone={whatsappPhone}
                         />
                       ))}
                     </div>
@@ -469,10 +524,80 @@ export default function App() {
                     courseColor={getCourseColor(task.courseId)}
                     cachedSolution={solutions[task.id] || null}
                     onSolutionSaved={(text) => saveSolution(task.id, text)}
+                    onSolutionCopied={saveStyleExample}
+                    styleExamples={styleExamples}
                     difficulty={difficulty[task.id] ?? null}
                     classifyingDifficulty={false}
+                    whatsappPhone={whatsappPhone}
                   />
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Plan tab */}
+        {tab === 'PLAN' && (
+          <div style={s.groupsContainer}>
+            <div style={s.aiPanel}>
+              <div style={s.aiPanelHeader}>
+                <div style={s.aiPanelTitleRow}>
+                  <span style={s.aiPanelIcon}>📅</span>
+                  <span style={{ ...s.aiPanelLabel, color: '#9c27b0' }}>Planejamento Semanal — IA</span>
+                </div>
+                {!weeklyPlanLoading && (
+                  <button style={s.reanalyzeBtn} onClick={() => generateWeeklyPlan(tasks)}>
+                    {weeklyPlan ? 'Regerar plano' : 'Gerar plano'}
+                  </button>
+                )}
+              </div>
+              {weeklyPlanLoading && (
+                <div style={s.aiLoading}><MiniSpinner /><span>Montando seu plano de estudos…</span></div>
+              )}
+              {weeklyPlanError && !weeklyPlanLoading && <p style={s.aiError}>{weeklyPlanError}</p>}
+              {weeklyPlan && !weeklyPlanLoading && (
+                <div style={{ ...s.aiText, marginTop: 4 }}>
+                  {weeklyPlan.split('\n').map((line, i) => {
+                    if (!line.trim()) return <br key={i} />
+                    const boldParts = line.split(/\*\*(.*?)\*\*/g)
+                    return (
+                      <p key={i} style={{ marginBottom: 6, lineHeight: 1.7 }}>
+                        {boldParts.map((p, j) => j % 2 === 1 ? <strong key={j}>{p}</strong> : p)}
+                      </p>
+                    )
+                  })}
+                </div>
+              )}
+              {!weeklyPlan && !weeklyPlanLoading && !weeklyPlanError && (
+                <p style={s.aiPlaceholder}>
+                  Clique em "Gerar plano" para criar um cronograma de estudos personalizado para esta semana.
+                </p>
+              )}
+            </div>
+
+            {styleExamples.length > 0 && (
+              <div style={s.aiPanel}>
+                <div style={s.aiPanelHeader}>
+                  <div style={s.aiPanelTitleRow}>
+                    <span style={s.aiPanelIcon}>✍</span>
+                    <span style={{ ...s.aiPanelLabel, color: '#e8710a' }}>Estilo Aprendido</span>
+                  </div>
+                  <button style={s.reanalyzeBtn} onClick={() => {
+                    setStyleExamples([])
+                    localStorage.removeItem('se_style')
+                  }}>Limpar</button>
+                </div>
+                <p style={s.aiPlaceholder}>
+                  {styleExamples.length} resposta{styleExamples.length !== 1 ? 's' : ''} aprovada{styleExamples.length !== 1 ? 's' : ''} salva{styleExamples.length !== 1 ? 's' : ''} como referência de estilo.
+                  A IA usará esses exemplos para manter consistência nas próximas respostas.
+                </p>
+                <ul style={{ marginTop: 6, paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {styleExamples.map((e, i) => (
+                    <li key={i} style={{ fontSize: 12, color: 'var(--se-t3)', background: 'var(--se-input)', padding: '4px 10px', borderRadius: 6 }}>
+                      ✓ {e.task}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>
@@ -797,6 +922,26 @@ const s = {
   clearCacheBtn: {
     background: 'none', border: '1px solid var(--se-border2)',
     color: 'var(--se-t3)', borderRadius: 6, padding: '10px 16px', fontSize: 12, cursor: 'pointer',
+  },
+
+  phoneBanner: {
+    background: '#e6f9ee', borderBottom: '1px solid #a8d5b5',
+    padding: '10px 20px', display: 'flex', alignItems: 'center',
+    gap: 10, flexWrap: 'wrap',
+  },
+  phoneBannerLabel: { fontSize: 13, color: '#1a5c34', fontFamily: FONT },
+  phoneInput: {
+    padding: '6px 12px', border: '1px solid #a8d5b5', borderRadius: 6,
+    fontSize: 13, fontFamily: FONT, background: '#fff', color: '#202124',
+    outline: 'none', width: 200,
+  },
+  phoneSaveBtn: {
+    background: '#25d366', border: 'none', borderRadius: 6,
+    color: '#fff', padding: '6px 16px', fontSize: 13, cursor: 'pointer', fontWeight: 500,
+  },
+  phoneClearBtn: {
+    background: 'none', border: '1px solid #a8d5b5', borderRadius: 6,
+    color: '#1a5c34', padding: '6px 12px', fontSize: 13, cursor: 'pointer',
   },
 }
 

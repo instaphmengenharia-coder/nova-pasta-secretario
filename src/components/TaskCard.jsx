@@ -7,7 +7,9 @@ const STATUS_CONFIG = {
   NEW:       { label: 'Atribuída',    color: '#1a73e8', bg: '#e8f0fe' },
 }
 
-export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cachedSolution, onSolutionSaved, difficulty = null, classifyingDifficulty = false }) {
+const AGENT_URL = 'https://agente-servidor-producao.up.railway.app'
+
+export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cachedSolution, onSolutionSaved, onSolutionCopied, styleExamples = [], difficulty = null, classifyingDifficulty = false, whatsappPhone = '' }) {
   const [expanded, setExpanded]             = useState(false)
   const [modalOpen, setModalOpen]           = useState(false)
   const [analysis, setAnalysis]             = useState(null)
@@ -26,6 +28,9 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
   const [chatInput, setChatInput]           = useState('')
   const [chatLoading, setChatLoading]       = useState(false)
   const chatEndRef                          = useRef(null)
+
+  const [whatsappSending, setWhatsappSending] = useState(false)
+  const [whatsappSent, setWhatsappSent]       = useState(false)
 
   useEffect(() => {
     if (cachedSolution && !solution) {
@@ -49,7 +54,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
     setSolveLoading(true)
     setSolveError(null)
     try {
-      const result = await solveTask(task)
+      const result = await solveTask(task, styleExamples)
       setSolution(result)
       setEditedSolution(result)
       onSolutionSaved?.(result)
@@ -66,6 +71,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
     navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+    onSolutionCopied?.({ task: task.title, answer: text })
   }
 
   const handleChatSend = async () => {
@@ -89,6 +95,28 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
     } finally {
       setChatLoading(false)
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+    }
+  }
+
+  const handleWhatsApp = async (e) => {
+    e.stopPropagation()
+    if (!whatsappPhone || whatsappSending) return
+    setWhatsappSending(true)
+    try {
+      const diff = task.dueDate ? task.dueDate - new Date() : null
+      const prazo = diff === null ? 'sem prazo' : diff <= 0 ? 'ATRASADA' : `faltam ${Math.round(diff / 3600000)}h`
+      await fetch(`${AGENT_URL}/whatsapp/notificar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telefone: whatsappPhone,
+          mensagem: `📚 *Secretário Escolar*\n\n⚠️ Atividade urgente!\n\n*${task.title}*\n📌 ${task.courseName}\n⏱ ${prazo}\n\n${task.alternateLink ? `🔗 ${task.alternateLink}` : ''}`.trim(),
+        }),
+      })
+      setWhatsappSent(true)
+      setTimeout(() => setWhatsappSent(false), 3000)
+    } catch { /* silent */ } finally {
+      setWhatsappSending(false)
     }
   }
 
@@ -166,6 +194,11 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
             {solution && (
               <button style={styles.copyQuickBtn} onClick={handleCopy}>
                 {copied ? '✓ Copiado!' : '⎘ Copiar resposta'}
+              </button>
+            )}
+            {urgent && whatsappPhone && (
+              <button style={styles.whatsappBtn} onClick={handleWhatsApp} disabled={whatsappSending}>
+                {whatsappSent ? '✓ Enviado!' : whatsappSending ? '…' : '📱 WhatsApp'}
               </button>
             )}
           </div>
@@ -462,6 +495,11 @@ const styles = {
     fontSize: 12, color: '#34a853', cursor: 'pointer',
     background: '#e6f4ea', padding: '4px 10px', borderRadius: 20,
     border: '1px solid #a8d5b5', fontWeight: 500,
+  },
+  whatsappBtn: {
+    fontSize: 12, color: '#fff', cursor: 'pointer',
+    background: '#25d366', padding: '4px 10px', borderRadius: 20,
+    border: 'none', fontWeight: 500,
   },
 
   right: { display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, paddingLeft: 12 },

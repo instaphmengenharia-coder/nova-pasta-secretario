@@ -39,6 +39,10 @@ export function useClaudeAI() {
   const [dashboardLoading, setDashboardLoading] = useState(false)
   const [dashboardError, setDashboardError] = useState(null)
 
+  const [weeklyPlan, setWeeklyPlan] = useState(null)
+  const [weeklyPlanLoading, setWeeklyPlanLoading] = useState(false)
+  const [weeklyPlanError, setWeeklyPlanError] = useState(null)
+
   /**
    * Generates a priority summary for all pending tasks.
    * Stores the result in `dashboardAnalysis`.
@@ -116,11 +120,60 @@ Responda em português, de forma clara e encorajadora, em no máximo 300 palavra
    * Reads the task and generates a complete ready-to-submit answer.
    * Returns the text directly (caller manages local state).
    */
-  const solveTask = useCallback(async (task) => {
+  /**
+   * Generates a weekly study plan for all pending tasks.
+   */
+  const generateWeeklyPlan = useCallback(async (tasks) => {
+    setWeeklyPlanLoading(true)
+    setWeeklyPlanError(null)
+    setWeeklyPlan(null)
+
+    try {
+      const pending = tasks.filter((t) => t.status !== 'TURNED_IN')
+      if (pending.length === 0) {
+        setWeeklyPlan('Parabéns! Você não tem atividades pendentes. Aproveite para revisar o conteúdo das suas turmas.')
+        return
+      }
+
+      const today = new Date()
+      const dayNames = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
+      const taskList = pending
+        .map((t) => `- ${t.title} | Turma: ${t.courseName} | Prazo: ${t.dueDateStr} | Tipo: ${formatWorkType(t.workType)}`)
+        .join('\n')
+
+      const prompt = `Você é um orientador educacional experiente. Crie um plano de estudos semanal para um aluno com as seguintes atividades pendentes.
+
+Hoje é ${dayNames[today.getDay()]}, ${today.toLocaleDateString('pt-BR')}.
+
+ATIVIDADES PENDENTES:
+${taskList}
+
+Crie um plano organizado por dia da semana (de hoje até domingo). Para cada dia com estudo:
+- Qual atividade focar (priorize as mais urgentes)
+- Tempo estimado em horas
+- Uma dica prática específica para essa atividade
+
+Use **Dia — data** como cabeçalho de cada dia. Deixe dias sem atividade marcados como "Descanso / revisão livre".
+Seja realista, prático e motivador. Máximo 280 palavras.`
+
+      const result = await callClaude(prompt)
+      setWeeklyPlan(result)
+    } catch (err) {
+      setWeeklyPlanError(err.message)
+    } finally {
+      setWeeklyPlanLoading(false)
+    }
+  }, [])
+
+  const solveTask = useCallback(async (task, styleExamples = []) => {
     const tipo = formatWorkType(task.workType)
     const pontos = task.maxPoints != null ? `${task.maxPoints} pontos` : 'não informada'
 
-    const prompt = `Você é um estudante brasileiro do ensino médio/técnico, inteligente e dedicado. Precisa entregar a atividade abaixo com qualidade suficiente para tirar nota máxima.
+    const styleSection = styleExamples.length > 0
+      ? `\nEXEMPLOS DO SEU ESTILO DE ESCRITA (respostas anteriores aprovadas — use como referência de estilo, tom e extensão):\n${styleExamples.map((e, idx) => `[Exemplo ${idx + 1} — ${e.task}]\n${e.answer}`).join('\n\n')}\n\n`
+      : ''
+
+    const prompt = `Você é um estudante brasileiro do ensino médio/técnico, inteligente e dedicado. Precisa entregar a atividade abaixo com qualidade suficiente para tirar nota máxima.${styleSection}
 
 ═══════════════════════════════
 DADOS DA ATIVIDADE
@@ -178,9 +231,13 @@ PROIBIDO: Não escreva preâmbulos como "Claro!", "Aqui está:", etc. Retorne AP
     analyzeTask,
     solveTask,
     refineAnswer,
+    generateWeeklyPlan,
     dashboardAnalysis,
     dashboardLoading,
     dashboardError,
+    weeklyPlan,
+    weeklyPlanLoading,
+    weeklyPlanError,
   }
 }
 
