@@ -195,7 +195,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
     <>
       {/* ── Row ── */}
       <motion.div style={styles.row} onClick={() => setExpanded(!expanded)}
-        whileHover={{ backgroundColor: 'var(--se-surface-hover, rgba(26,115,232,0.03))' }}
+        whileHover={{ backgroundColor: 'var(--se-surface-hover)' }}
         transition={{ duration: 0.12 }}
       >
         <div style={{ ...styles.dot, background: courseColor }} />

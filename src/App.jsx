@@ -83,6 +83,7 @@ export default function App() {
   const [showPhoneInput, setShowPhoneInput] = useState(false)
   const [phoneInputVal, setPhoneInputVal] = useState(() => localStorage.getItem('se_phone') || '')
   const [autoMode, setAutoMode] = useState(() => localStorage.getItem('se_auto') === '1')
+  const [extConnected, setExtConnected] = useState(false)
 
   const [solutions, setSolutions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('se_solutions') || '{}') } catch { return {} }
@@ -119,6 +120,33 @@ export default function App() {
     document.documentElement.classList.toggle('dark', dark)
     localStorage.setItem('se_dark', dark ? '1' : '0')
   }, [dark])
+
+  // ── Extensão Chrome: detectar e manter status ─────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const userId = user?.id || user?.sub
+    if (!userId) return
+
+    function checkExt() {
+      window.postMessage({ type: 'SE_GET_STATUS' }, '*')
+    }
+
+    function onMessage(e) {
+      if (e.data?.type === 'SE_EXT_PRESENT') {
+        // Extensão instalada: envia userId
+        window.postMessage({ type: 'SE_SET_USER', userId }, '*')
+      }
+      if (e.data?.type === 'SE_STATUS') {
+        setExtConnected(!!e.data.connected)
+      }
+    }
+
+    window.addEventListener('message', onMessage)
+    checkExt()
+    const iv = setInterval(checkExt, 5000)
+    return () => { window.removeEventListener('message', onMessage); clearInterval(iv) }
+  }, [isAuthenticated, user])
 
   // ── Notifications: request permission on login ─────────────────────────────
   useEffect(() => {
@@ -235,6 +263,11 @@ export default function App() {
   const regularTasks    = tasks.filter((t) => !isNotice(t))
   const assignedTasks   = regularTasks.filter((t) => t.status !== 'TURNED_IN')
   const doneTasks       = regularTasks.filter((t) => t.status === 'TURNED_IN')
+  const urgentTasks     = assignedTasks.filter((t) => {
+    if (!t.dueDate) return false
+    const diff = t.dueDate - new Date()
+    return diff >= 0 && diff <= 3 * 86400000
+  })
 
   // Unified notices: notice-type tasks + professor announcements
   const noticeTasks = tasks.filter((t) => isNotice(t))
@@ -328,6 +361,25 @@ export default function App() {
                 {search && <button style={s.searchClear} onClick={() => setSearch('')}>✕</button>}
               </div>
             )}
+            {/* Badge extensão */}
+            <a
+              href="https://github.com/joaopaulocosbs/secretario-extension"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                ...s.iconBtn,
+                display: 'flex', alignItems: 'center', gap: 4,
+                textDecoration: 'none',
+                background: extConnected ? '#34a85322' : 'transparent',
+                color: extConnected ? '#34a853' : 'var(--se-t4)',
+                border: `1px solid ${extConnected ? '#34a853' : 'var(--se-border)'}`,
+                borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600,
+              }}
+              title={extConnected ? 'Extensão conectada' : 'Instalar extensão Chrome (clique para instruções)'}
+            >
+              <span style={{ fontSize: 10, width: 7, height: 7, borderRadius: '50%', background: extConnected ? '#34a853' : '#9aa0a6', display: 'inline-block', flexShrink: 0 }} />
+              {extConnected ? 'EXT ON' : 'EXT OFF'}
+            </a>
             <button style={s.iconBtn} title="Pesquisar" onClick={() => { setShowSearch(!showSearch); setSearch('') }}>⌕</button>
             <button style={s.iconBtn} title="Atualizar" onClick={refresh} disabled={loading}>{loading ? '…' : '↺'}</button>
             <button style={s.iconBtn} title={dark ? 'Modo claro' : 'Modo escuro'} onClick={() => setDark(!dark)}>
@@ -440,6 +492,33 @@ export default function App() {
             )}
           </div>
         </div>
+
+        {/* ── Stats Cards ── */}
+        {tasks.length > 0 && (
+          <motion.div style={s.statsRow}
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
+          >
+            <StatCard icon="🎓" value={courses.length}       label="Turmas ativas"    color="#1a73e8" onClick={() => {}} />
+            <StatCard icon="📋" value={assignedTasks.length} label="Pendentes"         color="#f29900" onClick={() => setTab('ASSIGNED')} active={tab === 'ASSIGNED'} />
+            <StatCard icon="⚡" value={urgentTasks.length}   label="Urgente (≤3 dias)" color="#ea4335" onClick={() => setTab('ASSIGNED')} highlight={urgentTasks.length > 0} />
+            <StatCard icon="✓"  value={doneTasks.length}     label="Entregas"          color="#34a853" onClick={() => setTab('DONE')} active={tab === 'DONE'} />
+          </motion.div>
+        )}
+
+        {/* ── Urgent banner ── */}
+        {urgentTasks.length > 0 && tab !== 'DONE' && (
+          <motion.div style={s.urgentBanner}
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.15 }}
+          >
+            <span style={s.urgentBannerIcon}>⚡</span>
+            <span>
+              <strong>{urgentTasks.length} atividade{urgentTasks.length !== 1 ? 's' : ''}</strong> com prazo em até 3 dias!
+              {courseFilter === '' && ' Clique em um card acima para filtrar.'}
+            </span>
+          </motion.div>
+        )}
 
         {/* AI panel */}
         <div style={s.aiPanel}>
@@ -811,6 +890,29 @@ export default function App() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+function StatCard({ icon, value, label, color, onClick, active = false, highlight = false }) {
+  return (
+    <motion.button
+      style={{
+        ...s.statCard,
+        borderColor: highlight ? color : active ? color + '55' : 'var(--se-border)',
+        boxShadow: highlight
+          ? `0 0 0 1px ${color}44, 0 4px 16px ${color}22`
+          : active ? `0 0 0 1px ${color}33` : 'none',
+      }}
+      onClick={onClick}
+      whileHover={{ scale: 1.03, y: -2 }}
+      whileTap={{ scale: 0.97 }}
+      transition={{ duration: 0.15 }}
+    >
+      <span style={{ fontSize: 22, lineHeight: 1 }}>{icon}</span>
+      <span style={{ ...s.statValue, color }}>{value}</span>
+      <span style={s.statLabel}>{label}</span>
+      {highlight && <span style={{ ...s.statPulse, background: color }} />}
+    </motion.button>
+  )
+}
+
 function LoadingDots() {
   return (
     <span style={{ display: 'inline-flex', gap: 4, marginRight: 10 }}>
@@ -956,6 +1058,36 @@ const s = {
     background: '#fce8e6', border: '1px solid #f28b82',
     color: '#c5221f', borderRadius: 8, padding: '12px 16px', fontSize: 14, marginBottom: 16,
   },
+
+  statsRow: {
+    display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 14,
+  },
+  statCard: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    gap: 4, padding: '16px 10px', borderRadius: 12,
+    background: 'var(--se-surface)', border: '1px solid var(--se-border)',
+    cursor: 'pointer', position: 'relative', overflow: 'hidden',
+    fontFamily: FONT, transition: 'border-color 0.2s',
+  },
+  statValue: {
+    fontSize: 26, fontWeight: 700, lineHeight: 1,
+  },
+  statLabel: {
+    fontSize: 11, color: 'var(--se-t4)', fontWeight: 500, textAlign: 'center',
+  },
+  statPulse: {
+    position: 'absolute', top: 6, right: 6,
+    width: 7, height: 7, borderRadius: '50%',
+    animation: 'pulse 2s ease-in-out infinite',
+  },
+
+  urgentBanner: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    background: 'var(--se-urgent-bg)', border: '1px solid var(--se-urgent-border)',
+    borderRadius: 8, padding: '10px 14px',
+    fontSize: 13, color: 'var(--se-urgent-color)', marginBottom: 14,
+  },
+  urgentBannerIcon: { fontSize: 16, flexShrink: 0 },
 
   toolbar: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1111,6 +1243,7 @@ if (typeof document !== 'undefined' && !document.getElementById('app-styles')) {
       --se-bg: #f1f3f4;
       --se-surface: #ffffff;
       --se-surface2: #f8f9fa;
+      --se-surface-hover: rgba(0,0,0,0.03);
       --se-input: #f1f3f4;
       --se-border: #e8eaed;
       --se-border2: #dadce0;
@@ -1120,11 +1253,15 @@ if (typeof document !== 'undefined' && !document.getElementById('app-styles')) {
       --se-t2: #3c4043;
       --se-t3: #5f6368;
       --se-t4: #9aa0a6;
+      --se-urgent-bg: #fff3cd;
+      --se-urgent-border: #f0c040;
+      --se-urgent-color: #7a4f00;
     }
     html.dark {
       --se-bg: #111111;
       --se-surface: #1e1e1e;
       --se-surface2: #252525;
+      --se-surface-hover: rgba(255,255,255,0.04);
       --se-input: #292929;
       --se-border: #363636;
       --se-border2: #363636;
@@ -1134,6 +1271,9 @@ if (typeof document !== 'undefined' && !document.getElementById('app-styles')) {
       --se-t2: #bdc1c6;
       --se-t3: #9aa0a6;
       --se-t4: #5f6368;
+      --se-urgent-bg: #2d1f00;
+      --se-urgent-border: #b07d00;
+      --se-urgent-color: #ffd860;
     }
     @keyframes spin  { to { transform: rotate(360deg); } }
     @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
