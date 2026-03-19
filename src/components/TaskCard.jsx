@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useClaudeAI } from '../hooks/useClaudeAI'
 
 const STATUS_CONFIG = {
@@ -7,9 +8,9 @@ const STATUS_CONFIG = {
   NEW:       { label: 'Atribuída',    color: '#1a73e8', bg: '#e8f0fe' },
 }
 
-const AGENT_URL = 'https://agente-servidor-producao.up.railway.app'
+const AGENT_URL = 'https://agente-servidor-production.up.railway.app'
 
-export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cachedSolution, onSolutionSaved, onSolutionCopied, styleExamples = [], difficulty = null, classifyingDifficulty = false, whatsappPhone = '' }) {
+export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cachedSolution, onSolutionSaved, onSolutionCopied, styleExamples = [], difficulty = null, classifyingDifficulty = false, whatsappPhone = '', accessToken = null, solveTaskWithContext = null }) {
   const [expanded, setExpanded]             = useState(false)
   const [modalOpen, setModalOpen]           = useState(false)
   const [analysis, setAnalysis]             = useState(null)
@@ -32,6 +33,38 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
   const [whatsappSending, setWhatsappSending] = useState(false)
   const [whatsappSent, setWhatsappSent]       = useState(false)
 
+  const [delivering, setDelivering]   = useState(false)
+  const [delivered, setDelivered]     = useState(false)
+  const [deliverError, setDeliverError] = useState(null)
+
+  const handleDeliver = async () => {
+    if (!accessToken || delivering || delivered) return
+    const text = editedSolution || solution
+    if (!text) return
+    setDelivering(true)
+    setDeliverError(null)
+    try {
+      const res = await fetch(`${AGENT_URL}/atividade/entregar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseId: task.courseId,
+          workId: task.id,
+          resposta: text,
+          tipoResposta: task.workType,
+          accessToken,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.erro || data.message || 'Erro ao entregar')
+      setDelivered(true)
+    } catch (err) {
+      setDeliverError(err.message)
+    } finally {
+      setDelivering(false)
+    }
+  }
+
   useEffect(() => {
     if (cachedSolution && !solution) {
       setSolution(cachedSolution)
@@ -46,6 +79,8 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
     ? { label: 'Urgente', color: '#ea4335', bg: '#fce8e6' }
     : STATUS_CONFIG[task.status] || STATUS_CONFIG.NEW
 
+  const [contextMateriais, setContextMateriais] = useState([])
+
   const handleSolveClick = async (e) => {
     e.stopPropagation()
     setSolveOpen(true)
@@ -58,6 +93,26 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
       setSolution(result)
       setEditedSolution(result)
       onSolutionSaved?.(result)
+    } catch (err) {
+      setSolveError(err.message)
+    } finally {
+      setSolveLoading(false)
+    }
+  }
+
+  const handleSolveWithContext = async (e) => {
+    e.stopPropagation()
+    if (!solveTaskWithContext || !accessToken) return
+    setSolveOpen(true)
+    setSolveLoading(true)
+    setSolveError(null)
+    setContextMateriais([])
+    try {
+      const { text, materiais } = await solveTaskWithContext(task, accessToken, styleExamples)
+      setSolution(text)
+      setEditedSolution(text)
+      setContextMateriais(materiais)
+      onSolutionSaved?.(text)
     } catch (err) {
       setSolveError(err.message)
     } finally {
@@ -139,7 +194,10 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
   return (
     <>
       {/* ── Row ── */}
-      <div style={styles.row} onClick={() => setExpanded(!expanded)}>
+      <motion.div style={styles.row} onClick={() => setExpanded(!expanded)}
+        whileHover={{ backgroundColor: 'var(--se-surface-hover, rgba(26,115,232,0.03))' }}
+        transition={{ duration: 0.12 }}
+      >
         <div style={{ ...styles.dot, background: courseColor }} />
 
         <div style={styles.icon}>
@@ -204,8 +262,14 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
           </div>
 
           {/* Expanded area */}
+          <AnimatePresence initial={false}>
           {expanded && (
-            <div style={styles.expandedArea} onClick={(e) => e.stopPropagation()}>
+            <motion.div style={styles.expandedArea} onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+              animate={{ opacity: 1, height: 'auto', overflow: 'hidden' }}
+              exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+            >
               {task.description && (
                 <p style={styles.description}>{task.description}</p>
               )}
@@ -214,16 +278,28 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
                   ✦ Dicas da IA
                 </button>
                 {task.status !== 'TURNED_IN' && (
-                  <button
-                    style={{ ...styles.solveBtn, ...(solution ? styles.solveBtnDone : {}) }}
-                    onClick={handleSolveClick}
-                  >
-                    {solution ? '✓ Ver Resposta' : '✎ Resolver com IA'}
-                  </button>
+                  <>
+                    <button
+                      style={{ ...styles.solveBtn, ...(solution ? styles.solveBtnDone : {}) }}
+                      onClick={handleSolveClick}
+                    >
+                      {solution ? '✓ Ver Resposta' : '✎ Resolver com IA'}
+                    </button>
+                    {solveTaskWithContext && accessToken && !solution && (
+                      <button
+                        style={{ ...styles.solveBtn, background: '#7c3aed', marginLeft: 6 }}
+                        onClick={handleSolveWithContext}
+                        title="Lê os documentos e PDFs anexados antes de responder"
+                      >
+                        ✦ Resolver com Contexto
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
 
         <div style={styles.right}>
@@ -232,14 +308,25 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
           </span>
           <span style={styles.chevron}>{expanded ? '▲' : '▼'}</span>
         </div>
-      </div>
+      </motion.div>
 
       <div style={styles.rowDivider} />
 
       {/* ── Resolver Modal ── */}
+      <AnimatePresence>
       {solveOpen && (
-        <div style={styles.overlay} onClick={() => setSolveOpen(false)}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <motion.div style={styles.overlay}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={() => setSolveOpen(false)}
+        >
+          <motion.div style={styles.modal}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div style={{ height: 5, background: courseColor, borderRadius: '12px 12px 0 0' }} />
 
             <div style={styles.modalHeader}>
@@ -255,14 +342,28 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
               {solveLoading && (
                 <div style={styles.loadingWrap}>
                   <Spinner />
-                  <p style={styles.loadingText}>Claude está resolvendo a atividade…</p>
+                  <p style={styles.loadingText}>Claude está lendo os materiais e resolvendo…</p>
+                </div>
+              )}
+              {contextMateriais.length > 0 && !solveLoading && (
+                <div style={{ fontSize: 11, color: 'var(--se-t3)', marginBottom: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 600 }}>Lidos:</span>
+                  {contextMateriais.map((m, i) => (
+                    <span key={i} style={{ background: 'var(--se-border)', borderRadius: 4, padding: '1px 6px' }}>
+                      {m.tipo}: {m.titulo}
+                    </span>
+                  ))}
                 </div>
               )}
               {solveError && !solveLoading && (
                 <div style={styles.errorBox}><strong>Erro:</strong> {solveError}</div>
               )}
               {solution && !solveLoading && (
-                <>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                >
                   <div style={styles.solveToolbar}>
                     <span style={styles.solveToolbarLabel}>Resposta gerada pela IA</span>
                     <button style={styles.editToggleBtn(editMode)} onClick={() => setEditMode(!editMode)}>
@@ -284,7 +385,29 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
                   <button style={styles.copyBtn} onClick={handleCopy}>
                     {copied ? '✓ Copiado!' : '⎘ Copiar resposta'}
                   </button>
-                  <p style={styles.solveHint}>Edite se necessário, depois copie e cole no Google Classroom.</p>
+
+                  {accessToken && task.status !== 'TURNED_IN' && (
+                    <>
+                      <button
+                        style={{
+                          ...styles.copyBtn,
+                          background: delivered ? '#34a853' : delivering ? '#999' : '#1a73e8',
+                          marginTop: 6,
+                        }}
+                        onClick={handleDeliver}
+                        disabled={delivering || delivered}
+                      >
+                        {delivered ? '✓ Entregue no Classroom!' : delivering ? '⏳ Entregando…' : '🚀 Enviar atividade'}
+                      </button>
+                      {deliverError && (
+                        <div style={{ ...styles.errorBox, marginTop: 6, fontSize: 12 }}>
+                          {deliverError}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <p style={styles.solveHint}>Edite se necessário, depois copie ou envie direto no Classroom.</p>
 
                   {/* ── Chat de refinamento ── */}
                   <div style={styles.chatWrap}>
@@ -293,9 +416,14 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
                     {chatMessages.length > 0 && (
                       <div style={styles.chatHistory}>
                         {chatMessages.map((m, i) => (
-                          <div key={i} style={m.role === 'user' ? styles.chatMsgUser : styles.chatMsgAI}>
+                          <motion.div key={i}
+                            style={m.role === 'user' ? styles.chatMsgUser : styles.chatMsgAI}
+                            initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ duration: 0.18 }}
+                          >
                             {m.text}
-                          </div>
+                          </motion.div>
                         ))}
                         {chatLoading && (
                           <div style={styles.chatMsgAI}>
@@ -324,20 +452,32 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
                       </button>
                     </div>
                   </div>
-                </>
+                </motion.div>
               )}
             </div>
             <div style={styles.modalFooter}>
               <span style={styles.footerNote}>Gerado por Claude AI · Secretário Escolar</span>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* ── IA Modal ── */}
+      <AnimatePresence>
       {modalOpen && (
-        <div style={styles.overlay} onClick={() => setModalOpen(false)}>
-          <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <motion.div style={styles.overlay}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={() => setModalOpen(false)}
+        >
+          <motion.div style={styles.modal}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div style={{ height: 5, background: courseColor, borderRadius: '12px 12px 0 0' }} />
 
             <div style={styles.modalHeader}>
@@ -366,9 +506,10 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
             <div style={styles.modalFooter}>
               <span style={styles.footerNote}>Gerado por Claude AI · Secretário Escolar</span>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </>
   )
 }

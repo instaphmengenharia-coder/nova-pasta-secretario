@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useClassroom } from './hooks/useClassroom'
 import { useClaudeAI } from './hooks/useClaudeAI'
 import { useML } from './hooks/useML'
@@ -46,12 +47,12 @@ const GROUP_DEFS = [
 export default function App() {
   const {
     isAuthenticated, user, courses, tasks, announcements, loading, error,
-    stats, signIn, signOut, isUrgent, refresh,
+    stats, signIn, signOut, isUrgent, isNotice, refresh, accessToken, refreshToken,
   } = useClassroom()
 
   const {
     analyzePriorities, dashboardAnalysis, dashboardLoading, dashboardError, solveTask,
-    generateWeeklyPlan, weeklyPlan, weeklyPlanLoading, weeklyPlanError,
+    solveTaskWithContext, generateWeeklyPlan, weeklyPlan, weeklyPlanLoading, weeklyPlanError,
   } = useClaudeAI()
 
   const {
@@ -62,15 +63,26 @@ export default function App() {
   } = useML()
 
   const [tab, setTab]                   = useState('ASSIGNED')
+  const [readNotices, setReadNotices]   = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('se_read') || '[]')) } catch { return new Set() }
+  })
+  const markRead = (id) => {
+    setReadNotices((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      localStorage.setItem('se_read', JSON.stringify([...next]))
+      return next
+    })
+  }
   const [courseFilter, setCourseFilter] = useState('')
   const [search, setSearch]             = useState('')
   const [showSearch, setShowSearch]     = useState(false)
-  const [showAnnouncements, setShowAnnouncements] = useState(false)
   const [openGroups, setOpenGroups]     = useState({ overdue: true, thisWeek: true, nextWeek: true, later: true, noDate: false })
   const [dark, setDark]                 = useState(() => localStorage.getItem('se_dark') === '1')
   const [whatsappPhone, setWhatsappPhone] = useState(() => localStorage.getItem('se_phone') || '')
   const [showPhoneInput, setShowPhoneInput] = useState(false)
   const [phoneInputVal, setPhoneInputVal] = useState(() => localStorage.getItem('se_phone') || '')
+  const [autoMode, setAutoMode] = useState(() => localStorage.getItem('se_auto') === '1')
 
   const [solutions, setSolutions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('se_solutions') || '{}') } catch { return {} }
@@ -168,6 +180,38 @@ export default function App() {
       analyzePriorities(tasks)
   }, [isAuthenticated, tasks.length])
 
+  const AGENT_URL = 'https://agente-servidor-production.up.railway.app'
+
+  // ── Modo automático: registrar/desregistrar no scheduler ──────────────────
+  useEffect(() => {
+    if (!isAuthenticated || !user) return
+    localStorage.setItem('se_auto', autoMode ? '1' : '0')
+    if (autoMode) {
+      fetch(`${AGENT_URL}/scheduler/registrar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          accessToken,
+          refreshToken,
+          phone: whatsappPhone,
+          userName: user.name,
+          tasks: assignedTasks.map(t => ({
+            id: t.id, courseId: t.courseId, courseName: t.courseName,
+            title: t.title, description: t.description,
+            dueDate: t.dueDate, status: t.status, alternateLink: t.alternateLink,
+          })),
+        }),
+      }).catch(() => {})
+    } else {
+      fetch(`${AGENT_URL}/scheduler/desregistrar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      }).catch(() => {})
+    }
+  }, [autoMode, isAuthenticated, tasks.length])
+
   useEffect(() => {
     if (!isAuthenticated || tasks.length === 0) return
     const unclassified = tasks.filter(
@@ -188,8 +232,32 @@ export default function App() {
     prevTasksRef.current = tasks
   }, [tasks])
 
-  const assignedTasks   = tasks.filter((t) => t.status !== 'TURNED_IN')
-  const doneTasks       = tasks.filter((t) => t.status === 'TURNED_IN')
+  const regularTasks    = tasks.filter((t) => !isNotice(t))
+  const assignedTasks   = regularTasks.filter((t) => t.status !== 'TURNED_IN')
+  const doneTasks       = regularTasks.filter((t) => t.status === 'TURNED_IN')
+
+  // Unified notices: notice-type tasks + professor announcements
+  const noticeTasks = tasks.filter((t) => isNotice(t))
+  const allNotices = [
+    ...noticeTasks.map((t) => ({
+      id: `task-${t.id}`,
+      courseId: t.courseId,
+      courseName: t.courseName,
+      title: t.title,
+      text: t.description,
+      creationTime: t.dueDate,
+      alternateLink: t.alternateLink,
+    })),
+    ...announcements.map((a) => ({
+      id: `ann-${a.courseId}-${a.id}`,
+      courseId: a.courseId,
+      courseName: a.courseName,
+      title: null,
+      text: a.text,
+      creationTime: a.creationTime,
+      alternateLink: a.alternateLink,
+    })),
+  ].filter((n) => !readNotices.has(n.id))
 
   const applyFilters = (list) => list.filter((t) => {
     if (courseFilter && t.courseId !== courseFilter) return false
@@ -214,7 +282,11 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <div style={s.loginPage}>
-        <div style={s.loginCard}>
+        <motion.div style={s.loginCard}
+          initial={{ opacity: 0, y: 28, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.45, ease: 'easeOut' }}
+        >
           <ClassroomLogo size={56} />
           <h1 style={s.loginTitle}>Secretário Escolar</h1>
           <p style={s.loginSub}>
@@ -226,7 +298,7 @@ export default function App() {
             Entrar com Google
           </button>
           <p style={s.loginHint}>Requer acesso ao Google Classroom</p>
-        </div>
+        </motion.div>
       </div>
     )
   }
@@ -268,6 +340,22 @@ export default function App() {
             >
               📱
             </button>
+            <button
+              style={{
+                ...s.iconBtn,
+                background: autoMode ? '#4caf5022' : 'transparent',
+                color: autoMode ? '#4caf50' : 'var(--se-t3)',
+                border: `1px solid ${autoMode ? '#4caf50' : 'var(--se-border)'}`,
+                borderRadius: 6,
+                padding: '2px 8px',
+                fontSize: 11,
+                fontWeight: 600,
+              }}
+              title={autoMode ? 'Modo automático ligado — clique para desligar' : 'Modo automático desligado — clique para ligar'}
+              onClick={() => setAutoMode(!autoMode)}
+            >
+              {autoMode ? '🤖 AUTO' : '🤖 AUTO'}
+            </button>
             {user && (
               <div style={s.userInfo}>
                 {user.photo
@@ -282,13 +370,16 @@ export default function App() {
 
         {/* Tabs */}
         <div style={s.tabRow}>
-          {[['ASSIGNED', 'Atribuídas'], ['DONE', 'Concluídas'], ['PLAN', 'Plano Semanal']].map(([key, label]) => (
+          {[
+            ['ASSIGNED', 'Pendentes', assignedTasks.length],
+            ['DONE', 'Entregues', doneTasks.length],
+            ['NOTICES', '📢 Avisos', allNotices.length],
+            ['PLAN', 'Plano Semanal', null],
+          ].map(([key, label, count]) => (
             <button key={key} style={s.tab(tab === key)} onClick={() => setTab(key)}>
               {label}
-              {key !== 'PLAN' && (
-                <span style={s.tabCount(tab === key)}>
-                  {key === 'ASSIGNED' ? assignedTasks.length : doneTasks.length}
-                </span>
+              {count !== null && (
+                <span style={s.tabCount(tab === key)}>{count}</span>
               )}
             </button>
           ))}
@@ -405,49 +496,15 @@ export default function App() {
           )}
         </div>
 
-        {/* Announcements */}
-        {announcements.length > 0 && (
-          <div style={s.annPanel}>
-            <button style={s.annToggle} onClick={() => setShowAnnouncements(!showAnnouncements)}>
-              <span>📢</span>
-              <span style={s.annToggleText}>
-                Avisos dos Professores
-                <span style={s.annCount}>{announcements.length}</span>
-              </span>
-              <span style={s.chevron}>{showAnnouncements ? '▲' : '▼'}</span>
-            </button>
-            {showAnnouncements && (
-              <div style={s.annList}>
-                {announcements.map((ann) => (
-                  <div key={`${ann.courseId}-${ann.id}`} style={{
-                    ...s.annItem, borderLeft: `4px solid ${getCourseColor(ann.courseId)}`,
-                  }}>
-                    <div style={s.annItemTop}>
-                      <span style={{ color: getCourseColor(ann.courseId), fontSize: 12, fontWeight: 600 }}>
-                        {ann.courseName}
-                      </span>
-                      {ann.creationTime && (
-                        <span style={s.annDate}>{ann.creationTime.toLocaleDateString('pt-BR')}</span>
-                      )}
-                    </div>
-                    <p style={s.annText}>
-                      {ann.text.length > 200 ? ann.text.slice(0, 200) + '…' : ann.text}
-                    </p>
-                    {ann.alternateLink && (
-                      <a href={ann.alternateLink} target="_blank" rel="noopener noreferrer" style={s.annLink}>
-                        Ver no Classroom →
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
+        {/* Tabs with animation */}
+        <AnimatePresence mode="wait">
         {/* Assigned tab */}
         {tab === 'ASSIGNED' && (
-          <div style={s.groupsContainer}>
+          <motion.div key="assigned" style={s.groupsContainer}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+          >
             {GROUP_DEFS.map(({ key, label }) => {
               const items = groups[key]
               const isOpen = openGroups[key]
@@ -472,20 +529,28 @@ export default function App() {
 
                   {isOpen && items.length > 0 && (
                     <div style={s.groupItems}>
-                      {items.map((task) => (
-                        <TaskCard
+                      {items.map((task, i) => (
+                        <motion.div
                           key={`${task.courseId}-${task.id}`}
-                          task={task}
-                          isUrgent={isUrgent(task)}
-                          courseColor={getCourseColor(task.courseId)}
-                          cachedSolution={solutions[task.id] || null}
-                          onSolutionSaved={(text) => saveSolution(task.id, text)}
-                          onSolutionCopied={saveStyleExample}
-                          styleExamples={styleExamples}
-                          difficulty={difficulty[task.id] ?? null}
-                          classifyingDifficulty={classifying.has(task.id)}
-                          whatsappPhone={whatsappPhone}
-                        />
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: Math.min(i * 0.05, 0.35), duration: 0.22 }}
+                        >
+                          <TaskCard
+                            task={task}
+                            isUrgent={isUrgent(task)}
+                            courseColor={getCourseColor(task.courseId)}
+                            cachedSolution={solutions[task.id] || null}
+                            onSolutionSaved={(text) => saveSolution(task.id, text)}
+                            onSolutionCopied={saveStyleExample}
+                            styleExamples={styleExamples}
+                            difficulty={difficulty[task.id] ?? null}
+                            classifyingDifficulty={classifying.has(task.id)}
+                            whatsappPhone={whatsappPhone}
+                            accessToken={accessToken}
+                            solveTaskWithContext={solveTaskWithContext}
+                          />
+                        </motion.div>
                       ))}
                     </div>
                   )}
@@ -503,12 +568,15 @@ export default function App() {
                 <p style={s.emptyText}>Nenhuma atividade pendente.</p>
               </div>
             )}
-          </div>
+          </motion.div>
         )}
 
         {/* Done tab */}
         {tab === 'DONE' && (
-          <div style={s.groupsContainer}>
+          <motion.div key="done" style={s.groupsContainer}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+          >
             {visibleDone.length === 0 && !loading ? (
               <div style={s.emptyState}>
                 <p style={s.emptyIcon}>✓</p>
@@ -516,29 +584,93 @@ export default function App() {
               </div>
             ) : (
               <div style={s.groupItems}>
-                {visibleDone.map((task) => (
-                  <TaskCard
+                {visibleDone.map((task, i) => (
+                  <motion.div
                     key={`${task.courseId}-${task.id}`}
-                    task={task}
-                    isUrgent={false}
-                    courseColor={getCourseColor(task.courseId)}
-                    cachedSolution={solutions[task.id] || null}
-                    onSolutionSaved={(text) => saveSolution(task.id, text)}
-                    onSolutionCopied={saveStyleExample}
-                    styleExamples={styleExamples}
-                    difficulty={difficulty[task.id] ?? null}
-                    classifyingDifficulty={false}
-                    whatsappPhone={whatsappPhone}
-                  />
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(i * 0.05, 0.35), duration: 0.22 }}
+                  >
+                    <TaskCard
+                      task={task}
+                      isUrgent={false}
+                      courseColor={getCourseColor(task.courseId)}
+                      cachedSolution={solutions[task.id] || null}
+                      onSolutionSaved={(text) => saveSolution(task.id, text)}
+                      onSolutionCopied={saveStyleExample}
+                      styleExamples={styleExamples}
+                      difficulty={difficulty[task.id] ?? null}
+                      classifyingDifficulty={false}
+                      whatsappPhone={whatsappPhone}
+                      accessToken={accessToken}
+                      solveTaskWithContext={solveTaskWithContext}
+                    />
+                  </motion.div>
                 ))}
               </div>
             )}
-          </div>
+          </motion.div>
+        )}
+
+        {/* Notices tab */}
+        {tab === 'NOTICES' && (
+          <motion.div key="notices" style={s.groupsContainer}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+          >
+            {allNotices.length === 0 ? (
+              <div style={s.emptyState}>
+                <p style={s.emptyIcon}>📭</p>
+                <p style={s.emptyText}>Nenhum aviso no momento.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {allNotices.map((notice, i) => (
+                  <motion.div key={notice.id}
+                    style={{ ...s.noticeCard, borderLeft: `4px solid ${getCourseColor(notice.courseId)}` }}
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: Math.min(i * 0.06, 0.3), duration: 0.22 }}
+                  >
+                    <div style={s.noticeTop}>
+                      <div>
+                        <span style={{ color: getCourseColor(notice.courseId), fontSize: 12, fontWeight: 600 }}>
+                          {notice.courseName}
+                        </span>
+                        {notice.title && <p style={s.noticeTitle}>{notice.title}</p>}
+                      </div>
+                      {notice.creationTime && (
+                        <span style={s.annDate}>{notice.creationTime.toLocaleDateString('pt-BR')}</span>
+                      )}
+                    </div>
+                    {notice.text && (
+                      <p style={s.noticeText}>
+                        {notice.text.length > 300 ? notice.text.slice(0, 300) + '…' : notice.text}
+                      </p>
+                    )}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
+                      {notice.alternateLink && (
+                        <a href={notice.alternateLink} target="_blank" rel="noopener noreferrer" style={s.annLink}>
+                          Ver no Classroom →
+                        </a>
+                      )}
+                      <button style={s.markReadBtn} onClick={() => markRead(notice.id)}>
+                        ✓ Marcar como lido
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </motion.div>
         )}
 
         {/* Plan tab */}
         {tab === 'PLAN' && (
-          <div style={s.groupsContainer}>
+          <motion.div key="plan" style={s.groupsContainer}
+            initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+          >
             <div style={s.aiPanel}>
               <div style={s.aiPanelHeader}>
                 <div style={s.aiPanelTitleRow}>
@@ -600,13 +732,25 @@ export default function App() {
                 </ul>
               </div>
             )}
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
 
         {/* Resolve-all modal */}
+        <AnimatePresence>
         {resolveAllOpen && (
-          <div style={s.overlay} onClick={() => !resolveAllRunning && setResolveAllOpen(false)}>
-            <div style={s.resolveAllModal} onClick={(e) => e.stopPropagation()}>
+          <motion.div style={s.overlay}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => !resolveAllRunning && setResolveAllOpen(false)}
+          >
+            <motion.div style={s.resolveAllModal}
+              initial={{ opacity: 0, scale: 0.94, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 16 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div style={s.resolveAllHeader}>
                 <h2 style={s.resolveAllTitle}>✦ Resolver Todas as Atividades</h2>
                 {!resolveAllRunning && (
@@ -656,9 +800,10 @@ export default function App() {
                   </div>
                 </div>
               )}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         )}
+        </AnimatePresence>
       </main>
     </div>
   )
@@ -922,6 +1067,19 @@ const s = {
   clearCacheBtn: {
     background: 'none', border: '1px solid var(--se-border2)',
     color: 'var(--se-t3)', borderRadius: 6, padding: '10px 16px', fontSize: 12, cursor: 'pointer',
+  },
+
+  noticeCard: {
+    background: 'var(--se-surface)', borderRadius: 10, padding: '14px 18px',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+  },
+  noticeTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 },
+  noticeTitle: { fontSize: 14, fontWeight: 600, color: 'var(--se-t1)', marginTop: 2 },
+  noticeText: { fontSize: 13, color: 'var(--se-t2)', lineHeight: 1.6 },
+  markReadBtn: {
+    background: 'none', border: '1px solid var(--se-border2)',
+    color: 'var(--se-t3)', borderRadius: 20, padding: '4px 12px',
+    fontSize: 12, cursor: 'pointer', fontWeight: 500,
   },
 
   phoneBanner: {

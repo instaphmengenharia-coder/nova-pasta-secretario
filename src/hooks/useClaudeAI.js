@@ -165,6 +165,31 @@ Seja realista, prático e motivador. Máximo 280 palavras.`
     }
   }, [])
 
+  // Resolve with full context: reads attached Docs/PDFs via agente-servidor
+  const solveTaskWithContext = useCallback(async (task, accessToken, styleExamples = []) => {
+    const SERVER = import.meta.env.VITE_AGENT_SERVER || 'https://agente-servidor-production.up.railway.app'
+    const res = await fetch(`${SERVER}/atividade/resolver-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: task.alternateLink,
+        courseId: task.courseId,
+        workId: task.id,
+        accessToken,
+        taskTitle: task.title,
+        taskDescription: task.description,
+        aluno: { nome: 'Aluno', serie: '' },
+        estiloExemplos: styleExamples,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.erro || `Erro ${res.status}`)
+    }
+    const data = await res.json()
+    return { text: data.rascunho, materiais: data.materiais || [] }
+  }, [])
+
   const solveTask = useCallback(async (task, styleExamples = []) => {
     const tipo = formatWorkType(task.workType)
     const pontos = task.maxPoints != null ? `${task.maxPoints} pontos` : 'não informada'
@@ -230,6 +255,7 @@ PROIBIDO: Não escreva preâmbulos como "Claro!", "Aqui está:", etc. Retorne AP
     analyzePriorities,
     analyzeTask,
     solveTask,
+    solveTaskWithContext,
     refineAnswer,
     generateWeeklyPlan,
     dashboardAnalysis,

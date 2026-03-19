@@ -2,22 +2,27 @@ import { useState, useEffect, useRef } from 'react'
 
 const SCOPES = [
   'https://www.googleapis.com/auth/classroom.courses.readonly',
-  'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
+  'https://www.googleapis.com/auth/classroom.coursework.me',
   'https://www.googleapis.com/auth/classroom.announcements.readonly',
+  'https://www.googleapis.com/auth/userinfo.profile',
+  'https://www.googleapis.com/auth/userinfo.email',
 ].join(' ')
+
+const SERVER = 'https://agente-servidor-production.up.railway.app'
 
 const BASE = 'https://classroom.googleapis.com/v1'
 
 export function useClassroom() {
   const [accessToken, setAccessToken] = useState(null)
-  const [user, setUser] = useState(null) // { name, photo }
+  const [refreshToken, setRefreshToken] = useState(null)
+  const [user, setUser] = useState(null) // { id, name, photo }
   const [courses, setCourses] = useState([])
   const [tasks, setTasks] = useState([])
   const [announcements, setAnnouncements] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const tokenClientRef = useRef(null)
-  const gsiReadyRef = useRef(false)
+  const codeClientRef = useRef(null)
+  const gsiReadyRef   = useRef(false)
 
   // Load Google Identity Services script once
   useEffect(() => {
@@ -30,55 +35,54 @@ export function useClassroom() {
     script.defer = true
     script.onload = () => {
       gsiReadyRef.current = true
-      initTokenClient()
+      initCodeClient()
     }
     document.head.appendChild(script)
   }, [])
 
-  const initTokenClient = () => {
+  const initCodeClient = () => {
     if (!window.google?.accounts?.oauth2) return
-    tokenClientRef.current = window.google.accounts.oauth2.initTokenClient({
+    codeClientRef.current = window.google.accounts.oauth2.initCodeClient({
       client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
       scope: SCOPES,
-      callback: handleTokenResponse,
+      ux_mode: 'popup',
+      callback: handleCodeResponse,
     })
   }
 
-  const handleTokenResponse = async (response) => {
+  const handleCodeResponse = async (response) => {
     if (response.error) {
       setError(`Erro de autenticação: ${response.error}`)
       return
     }
-    setAccessToken(response.access_token)
-    fetchUserProfile(response.access_token)
-    await fetchAllData(response.access_token)
+    try {
+      // Server exchanges code for tokens and stores refresh_token
+      const res = await fetch(`${SERVER}/auth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: response.code }),
+      })
+      if (!res.ok) throw new Error(`Servidor retornou ${res.status}`)
+      const { accessToken: token, refreshToken: rToken, userId, name, photo } = await res.json()
+      setAccessToken(token)
+      if (rToken) setRefreshToken(rToken)
+      setUser({ id: userId, name, photo })
+      await fetchAllData(token)
+    } catch (err) {
+      setError(`Erro ao fazer login: ${err.message}`)
+    }
   }
 
   const signIn = () => {
     setError(null)
-    if (tokenClientRef.current) {
-      tokenClientRef.current.requestAccessToken()
+    if (codeClientRef.current) {
+      codeClientRef.current.requestCode()
     } else {
-      // GSI may still be loading — re-init and try again
-      initTokenClient()
+      initCodeClient()
       setTimeout(() => {
-        if (tokenClientRef.current) tokenClientRef.current.requestAccessToken()
+        if (codeClientRef.current) codeClientRef.current.requestCode()
         else setError('Google Identity Services ainda não carregou. Aguarde e tente novamente.')
       }, 1000)
-    }
-  }
-
-  const fetchUserProfile = async (token) => {
-    try {
-      const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setUser({ name: data.name || data.email, photo: data.picture || null })
-      }
-    } catch {
-      // Non-fatal
     }
   }
 
@@ -248,6 +252,18 @@ export function useClassroom() {
 
   // ─── Derived helpers ──────────────────────────────────────────────────────────
 
+  const NOTICE_KEYWORDS = [
+    'informamos', 'comunicamos', 'lembramos', 'não é necessário entregar',
+    'apenas leia', 'não precisa entregar', 'sem necessidade de entrega',
+    'apenas informativo', 'não há entrega', 'sem entrega',
+  ]
+
+  const isNotice = (task) => {
+    if (task.workType === 'ANNOUNCEMENT' || task.workType === 'MATERIAL') return true
+    const desc = (task.description || '').toLowerCase()
+    return NOTICE_KEYWORDS.some((w) => desc.includes(w))
+  }
+
   const isUrgent = (task) => {
     if (!task.dueDate || task.status === 'TURNED_IN') return false
     const now = new Date()
@@ -264,6 +280,8 @@ export function useClassroom() {
 
   return {
     isAuthenticated: !!accessToken,
+    accessToken,
+    refreshToken,
     user,
     courses,
     tasks,
@@ -274,6 +292,7 @@ export function useClassroom() {
     signIn,
     signOut,
     isUrgent,
+    isNotice,
     refresh: () => accessToken && fetchAllData(accessToken),
   }
 }
