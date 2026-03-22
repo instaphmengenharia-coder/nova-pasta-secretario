@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useClaudeAI } from '../hooks/useClaudeAI'
+import { useBrowserAgent } from '../hooks/useBrowserAgent'
 
 const STATUS_CONFIG = {
   TURNED_IN: { label: 'Entregue',     color: '#34a853', bg: '#e6f4ea' },
@@ -10,7 +11,7 @@ const STATUS_CONFIG = {
 
 const AGENT_URL = 'https://agente-servidor-production.up.railway.app'
 
-export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cachedSolution, onSolutionSaved, onSolutionCopied, styleExamples = [], difficulty = null, classifyingDifficulty = false, whatsappPhone = '', accessToken = null, solveTaskWithContext = null }) {
+export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cachedSolution, onSolutionSaved, onSolutionCopied, styleExamples = [], difficulty = null, classifyingDifficulty = false, whatsappPhone = '', accessToken = null, solveTaskWithContext = null, extConnected = false }) {
   const [expanded, setExpanded]             = useState(false)
   const [modalOpen, setModalOpen]           = useState(false)
   const [analysis, setAnalysis]             = useState(null)
@@ -36,6 +37,35 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
   const [delivering, setDelivering]   = useState(false)
   const [delivered, setDelivered]     = useState(false)
   const [deliverError, setDeliverError] = useState(null)
+
+  const [agentOpen, setAgentOpen]         = useState(false)
+  const [permissionOpen, setPermissionOpen] = useState(false)
+  const { running, log, done, runAgent, stop, reset } = useBrowserAgent()
+  const agentLogRef = useRef(null)
+
+  function hasPermission() {
+    try {
+      const ts = localStorage.getItem('se_agent_permission')
+      if (!ts) return false
+      return Date.now() - Number(ts) < 30 * 24 * 3600 * 1000
+    } catch { return false }
+  }
+
+  function handleAgentClick(e) {
+    e.stopPropagation()
+    reset()
+    if (hasPermission()) {
+      setAgentOpen(true)
+    } else {
+      setPermissionOpen(true)
+    }
+  }
+
+  function grantPermission() {
+    localStorage.setItem('se_agent_permission', String(Date.now()))
+    setPermissionOpen(false)
+    setAgentOpen(true)
+  }
 
   const handleDeliver = async () => {
     if (!accessToken || delivering || delivered) return
@@ -152,6 +182,10 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
       setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
     }
   }
+
+  useEffect(() => {
+    if (agentLogRef.current) agentLogRef.current.scrollTop = agentLogRef.current.scrollHeight
+  }, [log])
 
   const handleWhatsApp = async (e) => {
     e.stopPropagation()
@@ -294,6 +328,15 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
                         ✦ Resolver com Contexto
                       </button>
                     )}
+                    {extConnected && task.alternateLink && (
+                      <button
+                        style={{ ...styles.solveBtn, background: '#0f9d58', marginLeft: 6 }}
+                        onClick={handleAgentClick}
+                        title="A IA abre o Chrome e faz a atividade por você"
+                      >
+                        🤖 Executar no Chrome
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -311,6 +354,147 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
       </motion.div>
 
       <div style={styles.rowDivider} />
+
+      {/* ── Modal de Permissão ── */}
+      <AnimatePresence>
+      {permissionOpen && (
+        <motion.div style={styles.overlay}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={() => setPermissionOpen(false)}
+        >
+          <motion.div style={{ ...styles.modal, maxWidth: 460 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 38, marginBottom: 10, textAlign: 'center' }}>🤖</div>
+            <h3 style={{ margin: '0 0 8px', fontSize: 17, textAlign: 'center' }}>A IA vai agir no seu Chrome</h3>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#555', textAlign: 'center', lineHeight: 1.6 }}>
+              Para realizar a atividade automaticamente, a IA vai:
+            </p>
+            <ul style={{ margin: '0 0 16px', paddingLeft: 0, listStyle: 'none', fontSize: 13, lineHeight: 2 }}>
+              <li>📂 Abrir a atividade no Google Classroom</li>
+              <li>📖 Ler o enunciado completo</li>
+              <li>✏️ Preencher a resposta gerada pela IA</li>
+              <li>📤 Clicar em Entregar</li>
+            </ul>
+
+            <div style={{ background: '#f8f9fa', border: '1px solid #e0e0e0', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8, color: '#333' }}>Acessos da extensão:</div>
+              <div style={{ color: '#1e7e34' }}>✅ Abrir abas no seu Chrome</div>
+              <div style={{ color: '#1e7e34' }}>✅ Ler conteúdo das páginas abertas</div>
+              <div style={{ color: '#1e7e34' }}>✅ Preencher campos de texto</div>
+              <div style={{ color: '#1e7e34' }}>✅ Clicar em botões</div>
+              <div style={{ color: '#c0392b', marginTop: 6 }}>❌ Acessar senhas salvas</div>
+              <div style={{ color: '#c0392b' }}>❌ Ver histórico de navegação</div>
+              <div style={{ color: '#c0392b' }}>❌ Acessar outras abas abertas</div>
+            </div>
+
+            <p style={{ margin: '0 0 16px', fontSize: 11, color: '#888', textAlign: 'center' }}>
+              Permissão válida por 30 dias. &nbsp;
+              <a href="/privacidade" target="_blank" rel="noreferrer" style={{ color: '#1a73e8' }}>
+                Ver política de privacidade
+              </a>
+            </p>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setPermissionOpen(false)}
+                style={{ flex: 1, background: '#f1f3f4', border: '1px solid #dadce0', borderRadius: 8, padding: '10px 0', fontSize: 14, cursor: 'pointer', color: '#444' }}
+              >
+                ❌ Cancelar
+              </button>
+              <button
+                onClick={grantPermission}
+                style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+              >
+                ✅ Permitir e continuar
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
+      {/* ── Agente Chrome Modal ── */}
+      <AnimatePresence>
+      {agentOpen && (
+        <motion.div style={styles.overlay}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={() => { if (!running) setAgentOpen(false) }}
+        >
+          <motion.div style={{ ...styles.modal, maxWidth: 540 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 16 }}>🤖 Agente Chrome</h3>
+              <button onClick={() => { if (!running) setAgentOpen(false) }} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#888' }}>✕</button>
+            </div>
+
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#555' }}>
+              <strong>{task.title}</strong><br />
+              <span style={{ color: '#888' }}>{task.courseName}</span>
+            </p>
+
+            {/* Log */}
+            {log.length > 0 && (
+              <div ref={agentLogRef} style={{ background: '#0d1117', borderRadius: 8, padding: 12, maxHeight: 280, overflowY: 'auto', marginBottom: 14, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7 }}>
+                {log.map(entry => {
+                  const colors = { info: '#8b949e', thinking: '#79c0ff', action: '#d2a8ff', result: '#56d364', error: '#f85149', success: '#56d364' }
+                  return (
+                    <div key={entry.id} style={{ color: colors[entry.type] || '#c9d1d9' }}>
+                      {entry.text}
+                    </div>
+                  )
+                })}
+                {running && <div style={{ color: '#79c0ff' }}>▌</div>}
+              </div>
+            )}
+
+            {done && (
+              <div style={{ background: '#e6f4ea', border: '1px solid #34a853', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#1e7e34' }}>
+                ✅ {done}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              {!running && !done && (
+                <button
+                  style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+                  onClick={() => runAgent(task)}
+                >
+                  ▶ Iniciar Agente
+                </button>
+              )}
+              {running && (
+                <button
+                  style={{ flex: 1, background: '#d93025', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+                  onClick={stop}
+                >
+                  ⏹ Parar
+                </button>
+              )}
+              {done && (
+                <button
+                  style={{ flex: 1, background: '#1a73e8', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+                  onClick={() => { reset(); }}
+                >
+                  ↺ Executar Novamente
+                </button>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
 
       {/* ── Resolver Modal ── */}
       <AnimatePresence>

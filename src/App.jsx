@@ -84,6 +84,7 @@ export default function App() {
   const [phoneInputVal, setPhoneInputVal] = useState(() => localStorage.getItem('se_phone') || '')
   const [autoMode, setAutoMode] = useState(() => localStorage.getItem('se_auto') === '1')
   const [extConnected, setExtConnected] = useState(false)
+  const [showExtModal, setShowExtModal] = useState(false)
 
   const [solutions, setSolutions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('se_solutions') || '{}') } catch { return {} }
@@ -362,9 +363,10 @@ export default function App() {
                 color: extConnected ? '#34a853' : 'var(--se-t4)',
                 border: `1px solid ${extConnected ? '#34a853' : 'var(--se-border)'}`,
                 borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600,
-                cursor: 'default',
+                cursor: extConnected ? 'default' : 'pointer',
               }}
-              title={extConnected ? 'Extensão Chrome conectada e ativa' : 'Extensão Chrome desconectada'}
+              title={extConnected ? 'Extensão Chrome conectada e ativa' : 'Clique para instalar a extensão'}
+              onClick={() => { if (!extConnected) setShowExtModal(true) }}
             >
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: extConnected ? '#34a853' : '#9aa0a6', display: 'inline-block', flexShrink: 0 }} />
               {extConnected ? 'EXT ON' : 'EXT OFF'}
@@ -395,7 +397,7 @@ export default function App() {
               title={autoMode ? 'Modo automático ligado — clique para desligar' : 'Modo automático desligado — clique para ligar'}
               onClick={() => setAutoMode(!autoMode)}
             >
-              {autoMode ? '🤖 AUTO' : '🤖 AUTO'}
+              {autoMode ? '🤖 AUTO ON' : '🤖 AUTO'}
             </button>
             {user && (
               <div style={s.userInfo}>
@@ -426,6 +428,67 @@ export default function App() {
           ))}
         </div>
       </header>
+
+      {/* Modal instalação da extensão */}
+      {showExtModal && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setShowExtModal(false)}
+        >
+          <div
+            style={{ background: 'var(--se-card)', borderRadius: 14, padding: '28px 32px', maxWidth: 420, width: '90%', boxShadow: '0 8px 40px rgba(0,0,0,0.25)', position: 'relative' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowExtModal(false)}
+              style={{ position: 'absolute', top: 12, right: 14, background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--se-t4)' }}
+            >✕</button>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>🧩</div>
+            <h2 style={{ margin: '0 0 6px', fontSize: 17, color: 'var(--se-t1)' }}>Instalar Extensão Chrome</h2>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--se-t3)', lineHeight: 1.6 }}>
+              A extensão permite que a IA controle seu Chrome e faça atividades automaticamente.
+            </p>
+
+            {/* Opção fácil */}
+            <div style={{ background: '#e8f5e9', border: '1px solid #34a853', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#1e7e34', marginBottom: 6 }}>⚡ Jeito Fácil — Instalador Automático (Windows)</div>
+              <ol style={{ margin: '0 0 10px', paddingLeft: 18, fontSize: 12, color: '#2d6a4f', lineHeight: 2 }}>
+                <li>Baixe o instalador abaixo</li>
+                <li>Clique duas vezes no arquivo <code>instalar.bat</code></li>
+                <li>Ele abre o Chrome automaticamente — siga as instruções na tela</li>
+              </ol>
+              <a
+                href="/api/download-ext"
+                download="instalar.bat"
+                style={{ display: 'block', background: '#0f9d58', color: '#fff', borderRadius: 7, padding: '9px 0', textAlign: 'center', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}
+              >
+                ⬇ Baixar Instalador (.bat)
+              </a>
+            </div>
+
+            {/* Opção manual */}
+            <details style={{ marginBottom: 12 }}>
+              <summary style={{ fontSize: 12, color: 'var(--se-t4)', cursor: 'pointer', marginBottom: 8 }}>Instalar manualmente (avançado)</summary>
+              <ol style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12, color: 'var(--se-t2)', lineHeight: 2 }}>
+                <li>Baixe o ZIP abaixo e extraia</li>
+                <li>Abra <strong>chrome://extensions</strong>, ative <strong>Modo do desenvolvedor</strong></li>
+                <li>Clique em <strong>"Carregar sem compactação"</strong></li>
+                <li>Selecione a pasta <strong>interna</strong> que contém <code>manifest.json</code></li>
+              </ol>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8, flexDirection: 'column' }}>
+                <a href="https://github.com/instaphmengenharia-coder/secretario-extension/archive/refs/heads/master.zip" target="_blank" rel="noreferrer"
+                  style={{ background: '#1a73e8', color: '#fff', borderRadius: 7, padding: '8px 0', textAlign: 'center', fontWeight: 600, fontSize: 12, textDecoration: 'none' }}>
+                  ⬇ Baixar ZIP
+                </a>
+                <button onClick={() => navigator.clipboard.writeText('chrome://extensions')}
+                  style={{ background: 'var(--se-surface)', border: '1px solid var(--se-border)', borderRadius: 7, padding: '8px 0', fontSize: 12, color: 'var(--se-t2)', cursor: 'pointer' }}>
+                  📋 Copiar chrome://extensions
+                </button>
+              </div>
+            </details>
+          </div>
+        </div>
+      )}
 
       {showPhoneInput && (
         <div style={s.phoneBanner}>
@@ -617,6 +680,7 @@ export default function App() {
                             whatsappPhone={whatsappPhone}
                             accessToken={accessToken}
                             solveTaskWithContext={solveTaskWithContext}
+                            extConnected={extConnected}
                           />
                         </motion.div>
                       ))}
@@ -672,6 +736,7 @@ export default function App() {
                       whatsappPhone={whatsappPhone}
                       accessToken={accessToken}
                       solveTaskWithContext={solveTaskWithContext}
+                      extConnected={extConnected}
                     />
                   </motion.div>
                 ))}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacidade — Secretário Escolar</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; line-height: 1.7; }
+    .container { max-width: 680px; margin: 48px auto; background: #fff; border-radius: 12px; padding: 40px 48px; box-shadow: 0 2px 16px rgba(0,0,0,.08); }
+    h1 { font-size: 24px; margin-bottom: 6px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 32px; }
+    h2 { font-size: 16px; margin: 28px 0 10px; color: #1a73e8; }
+    p, li { font-size: 14px; color: #444; }
+    ul { padding-left: 20px; }
+    li { margin-bottom: 6px; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-right: 6px; }
+    .yes { background: #e6f4ea; color: #1e7e34; }
+    .no  { background: #fce8e6; color: #c0392b; }
+    .row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 14px; }
+    footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #999; text-align: center; }
+    a { color: #1a73e8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔐 Política de Privacidade</h1>
+    <p class="subtitle">Secretário Escolar — Extensão Chrome com Agente IA · Atualizado em março de 2026</p>
+
+    <h2>O que a extensão acessa</h2>
+    <div class="row"><span class="badge yes">✅ Sim</span> Abas do Google Classroom abertas pelo agente</div>
+    <div class="row"><span class="badge yes">✅ Sim</span> Conteúdo das páginas de atividade (enunciados, campos de resposta)</div>
+    <div class="row"><span class="badge yes">✅ Sim</span> Campos de texto para preencher respostas</div>
+    <div class="row"><span class="badge yes">✅ Sim</span> Botões de entrega dentro do Classroom</div>
+    <div class="row"><span class="badge no">❌ Não</span> Senhas salvas no Chrome</div>
+    <div class="row"><span class="badge no">❌ Não</span> Histórico de navegação</div>
+    <div class="row"><span class="badge no">❌ Não</span> Outras abas abertas que não sejam da atividade</div>
+    <div class="row"><span class="badge no">❌ Não</span> Cookies de outros sites</div>
+    <div class="row"><span class="badge no">❌ Não</span> Arquivos do computador</div>
+    <div class="row"><span class="badge no">❌ Não</span> Câmera ou microfone</div>
+
+    <h2>Como funciona o agente</h2>
+    <p>Quando você clica em <strong>"🤖 Executar no Chrome"</strong>, o agente:</p>
+    <ul style="margin-top: 10px;">
+      <li>Abre uma nova aba no seu Chrome com a URL da atividade do Google Classroom</li>
+      <li>Lê o texto da página para entender o enunciado</li>
+      <li>Usa a IA (Claude da Anthropic) para gerar uma resposta</li>
+      <li>Preenche os campos e clica em Entregar</li>
+      <li>Fecha a aba automaticamente ao terminar</li>
+    </ul>
+
+    <h2>Dados enviados para a IA</h2>
+    <p>O texto da atividade (enunciado e campos) é enviado para a API da Anthropic (Claude) para gerar a resposta. <strong>Nenhum dado pessoal além do conteúdo da atividade é enviado.</strong></p>
+
+    <h2>Armazenamento local</h2>
+    <p>A extensão salva apenas:</p>
+    <ul style="margin-top: 10px;">
+      <li>Sua permissão para o agente agir (válida por 30 dias, no <code>localStorage</code> do navegador)</li>
+      <li>Respostas das atividades (cache local para evitar reprocessamento)</li>
+    </ul>
+    <p style="margin-top: 10px;">Esses dados ficam <strong>somente no seu computador</strong> e não são enviados a nenhum servidor.</p>
+
+    <h2>Contato</h2>
+    <p>Dúvidas? Entre em contato pelo site <a href="https://nova-pasta-secretario.vercel.app" target="_blank">Secretário Escolar</a>.</p>
+
+    <footer>
+      © 2026 Secretário Escolar · <a href="/">Voltar ao site</a>
+    </footer>
+  </div>
+</body>
+</html>
