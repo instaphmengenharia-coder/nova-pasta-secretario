@@ -121,32 +121,24 @@ export default function App() {
     localStorage.setItem('se_dark', dark ? '1' : '0')
   }, [dark])
 
-  // ── Extensão Chrome: detectar e manter status ─────────────────────────────
+  // ── Extensão Chrome: detectar status via ping direto ─────────────────────
   useEffect(() => {
     if (!isAuthenticated) return
-
-    const userId = user?.id || user?.sub
-    if (!userId) return
 
     function checkExt() {
       window.postMessage({ type: 'SE_GET_STATUS' }, '*')
     }
 
     function onMessage(e) {
-      if (e.data?.type === 'SE_EXT_PRESENT') {
-        // Extensão instalada: envia userId
-        window.postMessage({ type: 'SE_SET_USER', userId }, '*')
-      }
-      if (e.data?.type === 'SE_STATUS') {
-        setExtConnected(!!e.data.connected)
-      }
+      if (e.data?.type === 'SE_EXT_PRESENT') checkExt()
+      if (e.data?.type === 'SE_STATUS') setExtConnected(!!e.data.connected)
     }
 
     window.addEventListener('message', onMessage)
     checkExt()
-    const iv = setInterval(checkExt, 5000)
+    const iv = setInterval(checkExt, 4000)
     return () => { window.removeEventListener('message', onMessage); clearInterval(iv) }
-  }, [isAuthenticated, user])
+  }, [isAuthenticated])
 
   // ── Notifications: request permission on login ─────────────────────────────
   useEffect(() => {
@@ -362,24 +354,21 @@ export default function App() {
               </div>
             )}
             {/* Badge extensão */}
-            <a
-              href="https://github.com/joaopaulocosbs/secretario-extension"
-              target="_blank"
-              rel="noopener noreferrer"
+            <div
               style={{
                 ...s.iconBtn,
                 display: 'flex', alignItems: 'center', gap: 4,
-                textDecoration: 'none',
                 background: extConnected ? '#34a85322' : 'transparent',
                 color: extConnected ? '#34a853' : 'var(--se-t4)',
                 border: `1px solid ${extConnected ? '#34a853' : 'var(--se-border)'}`,
                 borderRadius: 6, padding: '2px 8px', fontSize: 11, fontWeight: 600,
+                cursor: 'default',
               }}
-              title={extConnected ? 'Extensão conectada' : 'Instalar extensão Chrome (clique para instruções)'}
+              title={extConnected ? 'Extensão Chrome conectada e ativa' : 'Extensão Chrome desconectada'}
             >
-              <span style={{ fontSize: 10, width: 7, height: 7, borderRadius: '50%', background: extConnected ? '#34a853' : '#9aa0a6', display: 'inline-block', flexShrink: 0 }} />
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: extConnected ? '#34a853' : '#9aa0a6', display: 'inline-block', flexShrink: 0 }} />
               {extConnected ? 'EXT ON' : 'EXT OFF'}
-            </a>
+            </div>
             <button style={s.iconBtn} title="Pesquisar" onClick={() => { setShowSearch(!showSearch); setSearch('') }}>⌕</button>
             <button style={s.iconBtn} title="Atualizar" onClick={refresh} disabled={loading}>{loading ? '…' : '↺'}</button>
             <button style={s.iconBtn} title={dark ? 'Modo claro' : 'Modo escuro'} onClick={() => setDark(!dark)}>
