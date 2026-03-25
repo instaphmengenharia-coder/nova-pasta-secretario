@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useClaudeAI } from '../hooks/useClaudeAI'
-import { useBrowserAgent } from '../hooks/useBrowserAgent'
+import { useBrowserAgent, getAgentHistory, analisarViabilidade } from '../hooks/useBrowserAgent'
+import { salvarEstilo } from '../hooks/useStyleMemory'
 
 const STATUS_CONFIG = {
   TURNED_IN: { label: 'Entregue',     color: '#34a853', bg: '#e6f4ea' },
@@ -11,7 +12,7 @@ const STATUS_CONFIG = {
 
 const AGENT_URL = 'https://agente-servidor-production.up.railway.app'
 
-export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cachedSolution, onSolutionSaved, onSolutionCopied, styleExamples = [], difficulty = null, classifyingDifficulty = false, whatsappPhone = '', accessToken = null, solveTaskWithContext = null, extConnected = false }) {
+export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cachedSolution, onSolutionSaved, onSolutionCopied, styleExamples = [], difficulty = null, classifyingDifficulty = false, whatsappPhone = '', accessToken = null, solveTaskWithContext = null, extConnected = false, userId = null }) {
   const [expanded, setExpanded]             = useState(false)
   const [modalOpen, setModalOpen]           = useState(false)
   const [analysis, setAnalysis]             = useState(null)
@@ -38,9 +39,14 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
   const [delivered, setDelivered]     = useState(false)
   const [deliverError, setDeliverError] = useState(null)
 
-  const [agentOpen, setAgentOpen]         = useState(false)
-  const [permissionOpen, setPermissionOpen] = useState(false)
-  const { running, log, done, runAgent, stop, reset } = useBrowserAgent()
+  const [agentOpen, setAgentOpen]                 = useState(false)
+  const [permissionOpen, setPermissionOpen]       = useState(false)
+  const [historyOpen, setHistoryOpen]             = useState(false)
+  const [agentHistory, setAgentHistory]           = useState([])
+  const [viabilidade, setViabilidade]             = useState(null)
+  const [viabilidadeOpen, setViabilidadeOpen]     = useState(false)
+  const [viabilidadeLoading, setViabilidadeLoading] = useState(false)
+  const { running, paused, log, done, pendingReview, runAgent, stop, pause, resume, reset, approveReview, rejectReview } = useBrowserAgent()
   const agentLogRef = useRef(null)
 
   function hasPermission() {
@@ -51,14 +57,39 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
     } catch { return false }
   }
 
-  function handleAgentClick(e) {
+  async function handleAgentClick(e) {
     e.stopPropagation()
     reset()
-    if (hasPermission()) {
-      setAgentOpen(true)
-    } else {
-      setPermissionOpen(true)
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+    if (!apiKey) {
+      if (hasPermission()) setAgentOpen(true)
+      else setPermissionOpen(true)
+      return
     }
+    setViabilidadeLoading(true)
+    setViabilidade(null)
+    try {
+      const analise = await analisarViabilidade(task, apiKey)
+      setViabilidade(analise)
+      if (!analise.possivel || analise.confianca === 'baixa') {
+        setViabilidadeOpen(true)
+      } else {
+        if (hasPermission()) setAgentOpen(true)
+        else setPermissionOpen(true)
+      }
+    } catch {
+      // se análise falhar, deixa tentar mesmo assim
+      if (hasPermission()) setAgentOpen(true)
+      else setPermissionOpen(true)
+    } finally {
+      setViabilidadeLoading(false)
+    }
+  }
+
+  function handleExecutarMesmoAssim() {
+    setViabilidadeOpen(false)
+    if (hasPermission()) setAgentOpen(true)
+    else setPermissionOpen(true)
   }
 
   function grantPermission() {
@@ -330,11 +361,12 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
                     )}
                     {extConnected && task.alternateLink && (
                       <button
-                        style={{ ...styles.solveBtn, background: '#0f9d58', marginLeft: 6 }}
+                        style={{ ...styles.solveBtn, background: viabilidadeLoading ? '#777' : '#0f9d58', marginLeft: 6 }}
                         onClick={handleAgentClick}
-                        title="A IA abre o Chrome e faz a atividade por você"
+                        disabled={viabilidadeLoading}
+                        title="A IA analisa e executa a atividade no Chrome"
                       >
-                        🤖 Executar no Chrome
+                        {viabilidadeLoading ? '🔍 Analisando...' : '🤖 Executar no Chrome'}
                       </button>
                     )}
                   </>
@@ -419,6 +451,77 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
       )}
       </AnimatePresence>
 
+      {/* ── Modal de Viabilidade ── */}
+      <AnimatePresence>
+      {viabilidadeOpen && viabilidade && (
+        <motion.div style={styles.overlay}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={() => setViabilidadeOpen(false)}
+        >
+          <motion.div style={{ ...styles.modal, maxWidth: 460 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 38, textAlign: 'center', marginBottom: 10 }}>
+              {viabilidade.possivel ? '⚠️' : '🚫'}
+            </div>
+            <h3 style={{ margin: '0 0 8px', fontSize: 17, textAlign: 'center' }}>
+              {viabilidade.possivel ? 'Atenção antes de executar' : 'Atividade não pode ser feita automaticamente'}
+            </h3>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#555', lineHeight: 1.6 }}>
+              {viabilidade.motivo}
+            </p>
+
+            {viabilidade.precisa_de?.length > 0 && (
+              <div style={{ background: '#f8f9fa', border: '1px solid #e0e0e0', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12 }}>
+                <div style={{ fontWeight: 700, marginBottom: 6, color: '#333' }}>
+                  {viabilidade.possivel ? 'Atenção para:' : 'Por que não é possível:'}
+                </div>
+                {viabilidade.precisa_de.map((item, i) => (
+                  <div key={i} style={{ color: viabilidade.possivel ? '#f29900' : '#c0392b', marginBottom: 3 }}>
+                    {viabilidade.possivel ? '⚠️' : '❌'} {item}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {viabilidade.possivel && viabilidade.estrategia && (
+              <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#2e7d32' }}>
+                <strong>Estratégia:</strong> {viabilidade.estrategia}
+              </div>
+            )}
+
+            {!viabilidade.possivel && (
+              <div style={{ background: '#fff3e0', border: '1px solid #ffcc02', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#e65100' }}>
+                <strong>O que você pode fazer:</strong> Acesse a atividade manualmente clicando em "Abrir no Classroom" e realize as etapas indicadas pelo professor.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setViabilidadeOpen(false)}
+                style={{ flex: 1, background: '#f1f3f4', border: '1px solid #dadce0', borderRadius: 8, padding: '10px 0', fontSize: 14, cursor: 'pointer', color: '#444' }}
+              >
+                {viabilidade.possivel ? 'Cancelar' : 'Entendido'}
+              </button>
+              {viabilidade.possivel && (
+                <button
+                  onClick={handleExecutarMesmoAssim}
+                  style={{ flex: 1, background: '#f29900', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+                >
+                  Tentar mesmo assim
+                </button>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
       {/* ── Agente Chrome Modal ── */}
       <AnimatePresence>
       {agentOpen && (
@@ -427,70 +530,147 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
           transition={{ duration: 0.18 }}
           onClick={() => { if (!running) setAgentOpen(false) }}
         >
-          <motion.div style={{ ...styles.modal, maxWidth: 540 }}
+          <motion.div style={{ ...styles.modal, maxWidth: 580, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-              <h3 style={{ margin: 0, fontSize: 16 }}>🤖 Agente Chrome</h3>
-              <button onClick={() => { if (!running) setAgentOpen(false) }} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#888' }}>✕</button>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 15 }}>🤖 Agente Chrome</h3>
+                {running && !paused && <span style={{ fontSize: 11, background: '#e8f5e9', color: '#1e7e34', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>● Executando</span>}
+                {paused && <span style={{ fontSize: 11, background: '#fff3cd', color: '#856404', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>⏸ Pausado</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => { setHistoryOpen(true); setAgentHistory(getAgentHistory().filter(h => h.taskId === task.id)) }} style={{ background: 'none', border: '1px solid #ddd', borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', color: '#666' }}>📋 Histórico</button>
+                <button onClick={() => { if (!running) setAgentOpen(false) }} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#888' }}>✕</button>
+              </div>
             </div>
 
-            <p style={{ margin: '0 0 14px', fontSize: 13, color: '#555' }}>
-              <strong>{task.title}</strong><br />
-              <span style={{ color: '#888' }}>{task.courseName}</span>
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: '#666' }}>
+              <strong>{task.title}</strong> · <span style={{ color: '#999' }}>{task.courseName}</span>
             </p>
+
+            {/* Review Banner */}
+            {pendingReview && (
+              <div style={{ background: '#fff8e1', border: '2px solid #f9a825', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#e65100', marginBottom: 8 }}>👁️ Revisar resposta antes de enviar</div>
+                <div style={{ background: '#fff', border: '1px solid #ffe082', borderRadius: 6, padding: 10, fontSize: 12, color: '#333', lineHeight: 1.6, maxHeight: 120, overflowY: 'auto', marginBottom: 10 }}>
+                  {pendingReview.summary && <div style={{ color: '#666', marginBottom: 6, fontStyle: 'italic' }}>{pendingReview.summary}</div>}
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{pendingReview.answer}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={rejectReview} style={{ flex: 1, background: '#fce4ec', color: '#c62828', border: '1px solid #ef9a9a', borderRadius: 7, padding: '8px 0', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>❌ Rejeitar</button>
+                  <button onClick={() => {
+                    // Salvar estilo antes de aprovar
+                    if (userId && pendingReview?.answer) {
+                      salvarEstilo({ userId, materia: task.courseName, resposta: pendingReview.answer })
+                    }
+                    approveReview()
+                  }} style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 0', fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>✅ Aprovar e Enviar</button>
+                </div>
+              </div>
+            )}
 
             {/* Log */}
             {log.length > 0 && (
-              <div ref={agentLogRef} style={{ background: '#0d1117', borderRadius: 8, padding: 12, maxHeight: 280, overflowY: 'auto', marginBottom: 14, fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7 }}>
+              <div ref={agentLogRef} style={{ background: '#0d1117', borderRadius: 8, padding: 10, flex: 1, overflowY: 'auto', marginBottom: 12, minHeight: 120, maxHeight: 320 }}>
                 {log.map(entry => {
-                  const colors = { info: '#8b949e', thinking: '#79c0ff', action: '#d2a8ff', result: '#56d364', error: '#f85149', success: '#56d364' }
+                  if (entry.type === 'screenshot') {
+                    return (
+                      <div key={entry.id} style={{ margin: '6px 0' }}>
+                        <img src={entry.content} alt="screenshot" style={{ width: '100%', borderRadius: 4, border: '1px solid #30363d' }} />
+                      </div>
+                    )
+                  }
+                  const colors = { info: '#8b949e', thinking: '#79c0ff', action: '#d2a8ff', result: '#56d364', error: '#f85149', success: '#3fb950', warn: '#f0a83b', review: '#ffa657' }
                   return (
-                    <div key={entry.id} style={{ color: colors[entry.type] || '#c9d1d9' }}>
-                      {entry.text}
+                    <div key={entry.id} style={{ color: colors[entry.type] || '#c9d1d9', fontFamily: 'monospace', fontSize: 11, lineHeight: 1.7 }}>
+                      {entry.content}
                     </div>
                   )
                 })}
-                {running && <div style={{ color: '#79c0ff' }}>▌</div>}
+                {running && !paused && <div style={{ color: '#79c0ff', fontFamily: 'monospace', fontSize: 11 }}>▌</div>}
               </div>
             )}
 
             {done && (
-              <div style={{ background: '#e6f4ea', border: '1px solid #34a853', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: '#1e7e34' }}>
+              <div style={{ background: '#e6f4ea', border: '1px solid #34a853', borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#1e7e34' }}>
                 ✅ {done}
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 8 }}>
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {!running && !done && (
-                <button
-                  style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
-                  onClick={() => runAgent(task)}
-                >
-                  ▶ Iniciar Agente
-                </button>
+                <button style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                  onClick={() => runAgent(task, { userId }, viabilidade)}>▶ Iniciar Agente</button>
               )}
-              {running && (
-                <button
-                  style={{ flex: 1, background: '#d93025', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
-                  onClick={stop}
-                >
-                  ⏹ Parar
-                </button>
+              {running && !paused && (
+                <>
+                  <button style={{ flex: 1, background: '#f57c00', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                    onClick={pause}>⏸ Pausar</button>
+                  <button style={{ flex: 1, background: '#d93025', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                    onClick={stop}>⏹ Parar</button>
+                </>
               )}
-              {done && (
-                <button
-                  style={{ flex: 1, background: '#1a73e8', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
-                  onClick={() => { reset(); }}
-                >
-                  ↺ Executar Novamente
-                </button>
+              {paused && (
+                <>
+                  <button style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                    onClick={resume}>▶ Continuar</button>
+                  <button style={{ flex: 1, background: '#d93025', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                    onClick={stop}>⏹ Parar</button>
+                </>
+              )}
+              {(done || (!running && log.length > 0)) && (
+                <button style={{ flex: 1, background: '#1a73e8', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}
+                  onClick={reset}>↺ Executar Novamente</button>
               )}
             </div>
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
+      {/* ── Histórico Modal ── */}
+      <AnimatePresence>
+      {historyOpen && (
+        <motion.div style={styles.overlay}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          onClick={() => setHistoryOpen(false)}
+        >
+          <motion.div style={{ ...styles.modal, maxWidth: 500 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 15 }}>📋 Histórico do Agente</h3>
+              <button onClick={() => setHistoryOpen(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#888' }}>✕</button>
+            </div>
+            {agentHistory.length === 0 ? (
+              <p style={{ color: '#999', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>Nenhuma execução registrada para esta atividade.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+                {agentHistory.map(h => {
+                  const statusConfig = { success: { color: '#1e7e34', bg: '#e6f4ea', icon: '✅' }, failed: { color: '#c62828', bg: '#fce4ec', icon: '❌' }, cancelled: { color: '#666', bg: '#f5f5f5', icon: '⛔' }, rejected: { color: '#e65100', bg: '#fff3e0', icon: '🚫' } }
+                  const sc = statusConfig[h.status] || statusConfig.failed
+                  return (
+                    <div key={h.id} style={{ background: sc.bg, border: `1px solid ${sc.color}33`, borderRadius: 8, padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: sc.color }}>{sc.icon} {h.status.toUpperCase()}</span>
+                        <span style={{ fontSize: 11, color: '#999' }}>{new Date(h.completedAt).toLocaleString('pt-BR')}</span>
+                      </div>
+                      {h.result && <div style={{ fontSize: 12, color: '#444' }}>{h.result}</div>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </motion.div>
         </motion.div>
       )}

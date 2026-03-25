@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useClassroom } from './hooks/useClassroom'
 import { useClaudeAI } from './hooks/useClaudeAI'
 import { useML } from './hooks/useML'
+import { useAutoAgent } from './hooks/useAutoAgent'
 import TaskCard from './components/TaskCard'
 
 const COURSE_COLORS = [
@@ -115,6 +116,25 @@ export default function App() {
   const [resolveAllRunning, setResolveAllRunning] = useState(false)
   const resolveAllAbortRef = useRef(false)
   const prevTasksRef       = useRef([])
+
+  // ── Auto Agent ────────────────────────────────────────────────────────────
+  const {
+    currentTask: autoCurrentTask,
+    queueSize: autoQueueSize,
+    running: autoRunning,
+    log: autoLog,
+    done: autoDone,
+    stopAuto,
+  } = useAutoAgent({ tasks, autoMode, extConnected, whatsappPhone })
+
+  const [autoCompleted, setAutoCompleted] = useState(0)
+  const prevAutoDone = useRef(null)
+  useEffect(() => {
+    if (autoDone && autoDone !== prevAutoDone.current) {
+      prevAutoDone.current = autoDone
+      setAutoCompleted(c => c + 1)
+    }
+  }, [autoDone])
 
   // ── Dark mode ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -331,6 +351,62 @@ export default function App() {
 
   return (
     <div style={s.app}>
+
+      {/* ── Auto Agent Banner ─────────────────────────────────────────────── */}
+      <AnimatePresence>
+      {autoMode && extConnected && (autoRunning || autoQueueSize > 0) && (
+        <motion.div
+          initial={{ opacity: 0, y: -80 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -80 }}
+          style={{
+            position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+            background: autoRunning ? '#0f9d58' : '#1565c0',
+            color: '#fff', padding: '8px 20px',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Left: status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>{autoRunning ? '🤖' : '⏳'}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>
+                  {autoRunning && autoCurrentTask
+                    ? <><strong>{autoCurrentTask.title}</strong> <span style={{ opacity: 0.85, fontWeight: 400 }}>— {autoCurrentTask.courseName}</span></>
+                    : <>{autoQueueSize} atividade{autoQueueSize !== 1 ? 's' : ''} na fila — aguardando extensão...</>
+                  }
+                </div>
+                {/* Last log entry */}
+                {autoRunning && autoLog?.length > 0 && (() => {
+                  const last = [...autoLog].reverse().find(e => e.type !== 'screenshot' && e.type !== 'thinking')
+                  return last ? <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>{last.content}</div> : null
+                })()}
+              </div>
+            </div>
+            {/* Right: counters + stop */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {autoCompleted > 0 && (
+                <span style={{ fontSize: 12, background: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: '2px 10px' }}>
+                  ✅ {autoCompleted} entregue{autoCompleted !== 1 ? 's' : ''}
+                </span>
+              )}
+              {autoQueueSize > 0 && (
+                <span style={{ fontSize: 12, opacity: 0.85 }}>
+                  {autoQueueSize} restante{autoQueueSize !== 1 ? 's' : ''}
+                </span>
+              )}
+              {autoRunning && (
+                <button onClick={stopAuto} style={{ background: 'rgba(255,255,255,0.25)', border: 'none', color: '#fff', borderRadius: 6, padding: '4px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
+                  ⏹ Parar
+                </button>
+              )}
+            </div>
+          </div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
       {/* Header */}
       <header style={s.header}>
         <div style={s.headerInner}>
@@ -681,6 +757,7 @@ export default function App() {
                             accessToken={accessToken}
                             solveTaskWithContext={solveTaskWithContext}
                             extConnected={extConnected}
+                            userId={user?.id || null}
                           />
                         </motion.div>
                       ))}
