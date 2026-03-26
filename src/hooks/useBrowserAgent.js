@@ -416,20 +416,36 @@ export function useBrowserAgent() {
 
       addLog('info', `🤖 Agente iniciado: "${task.title}"`)
 
-      let steps = 0
       let finished = false
+      let lastActionKey = null
+      let repeatCount = 0
+      const LOOP_LIMIT = 5 // cancela se mesma ação repetir N vezes seguidas
 
       // ── 4. Loop principal — sem limite de passos ───────────────────────────
       while (!abortRef.current && !finished) {
         await waitIfPaused()
         if (abortRef.current) break
-        steps++
 
         addLog('thinking', 'Pensando...')
         const aiText = await callClaude(apiKey, messages, systemPrompt)
         messages.push({ role: 'assistant', content: aiText })
 
         const action = parseAction(aiText)
+
+        // ── Detecção de loop: mesma ação repetida N vezes seguidas ───────────
+        const actionKey = `${action.action}|${action.url || ''}|${action.selector || ''}|${action.code || ''}`
+        if (actionKey === lastActionKey && action.action !== 'wait') {
+          repeatCount++
+          if (repeatCount >= LOOP_LIMIT) {
+            addLog('error', `⛔ Agente preso em loop: "${action.action}" repetiu ${LOOP_LIMIT}x seguidas — cancelando.`)
+            agentStatus = 'failed'
+            finished = true
+            break
+          }
+        } else {
+          lastActionKey = actionKey
+          repeatCount = 0
+        }
 
         if (action.action === 'done') {
           addLog('success', `✅ ${action.result}`)
