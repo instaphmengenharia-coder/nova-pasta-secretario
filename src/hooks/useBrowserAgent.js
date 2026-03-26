@@ -290,19 +290,32 @@ async function callClaude(apiKey, messages, systemPrompt, retry = 0) {
     },
     body: JSON.stringify({ model, max_tokens: 512, system: systemPrompt, messages: trimmed }),
   })
+  // Rate limit → aguarda e tenta de novo (até 3x, intervalo crescente)
   if (res.status === 429 && retry < 3) {
     releaseLock()
-    await new Promise(r => setTimeout(r, 20000)) // wait 20s on rate limit
+    const wait = (retry + 1) * 20000 // 20s, 40s, 60s
+    await new Promise(r => setTimeout(r, wait))
+    return callClaude(apiKey, messages, systemPrompt, retry + 1)
+  }
+  // Erro de servidor temporário → 1 retry
+  if ((res.status === 500 || res.status === 529) && retry < 2) {
+    releaseLock()
+    await new Promise(r => setTimeout(r, 10000))
     return callClaude(apiKey, messages, systemPrompt, retry + 1)
   }
   if (!res.ok) {
     releaseLock()
     const body = await res.json().catch(() => ({}))
-    throw new Error(body?.error?.message || `Erro HTTP ${res.status}`)
+    const msg = body?.error?.message || `Erro HTTP ${res.status}`
+    // Erro fatal não recuperável → enriquece mensagem para o usuário
+    if (res.status === 401) throw new Error('API key inválida ou expirada — verifique VITE_ANTHROPIC_API_KEY')
+    if (res.status === 403) throw new Error('Sem permissão — verifique a API key')
+    if (res.status === 529) throw new Error('API da Anthropic sobrecarregada — tente novamente em alguns minutos')
+    throw new Error(msg)
   }
   const data = await res.json()
   releaseLock()
-  await new Promise(r => setTimeout(r, 1500)) // 1.5s between calls
+  await new Promise(r => setTimeout(r, 1500)) // 1.5s entre chamadas
   return data.content[0].text
 }
 
@@ -440,7 +453,25 @@ export function useBrowserAgent() {
         if (abortRef.current) break
 
         addLog('thinking', 'Pensando...')
-        const aiText = await callClaude(apiKey, messages, systemPrompt)
+        let aiText
+        try {
+          aiText = await callClaude(apiKey, messages, systemPrompt)
+        } catch (apiErr) {
+          // Erro de API não derruba o agente — pausa e explica
+          addLog('error', `⚠️ Erro na API: ${apiErr.message}`)
+          if (apiErr.message.includes('401') || apiErr.message.includes('API key')) {
+            // Fatal não recuperável
+            agentStatus = 'failed'
+            finished = true
+            break
+          }
+          // Recuperável (rate limit, rede) → pausa e deixa usuário decidir
+          addLog('warn', '⏸️ Agente pausado por erro de API. Clique em Continuar para tentar novamente.')
+          setPaused(true)
+          pauseRef.current = true
+          messages.push({ role: 'user', content: 'Erro temporário na API. Retomando...' })
+          continue
+        }
         messages.push({ role: 'assistant', content: aiText })
 
         const action = parseAction(aiText)
