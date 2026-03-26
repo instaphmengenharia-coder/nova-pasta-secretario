@@ -497,7 +497,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
 
             {!viabilidade.possivel && (
               <div style={{ background: '#fff3e0', border: '1px solid #ffcc02', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#e65100' }}>
-                <strong>O que você pode fazer:</strong> Acesse a atividade manualmente clicando em "Abrir no Classroom" e realize as etapas indicadas pelo professor.
+                <strong>Mesmo assim:</strong> Você pode forçar a execução — o agente vai tentar e mostrará a resposta para você aprovar antes de entregar.
               </div>
             )}
 
@@ -506,16 +506,14 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
                 onClick={() => setViabilidadeOpen(false)}
                 style={{ flex: 1, background: '#f1f3f4', border: '1px solid #dadce0', borderRadius: 8, padding: '10px 0', fontSize: 14, cursor: 'pointer', color: '#444' }}
               >
-                {viabilidade.possivel ? 'Cancelar' : 'Entendido'}
+                Cancelar
               </button>
-              {viabilidade.possivel && (
-                <button
-                  onClick={handleExecutarMesmoAssim}
-                  style={{ flex: 1, background: '#f29900', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
-                >
-                  Tentar mesmo assim
-                </button>
-              )}
+              <button
+                onClick={handleExecutarMesmoAssim}
+                style={{ flex: 1, background: viabilidade.possivel ? '#f29900' : '#1a73e8', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+              >
+                {viabilidade.possivel ? 'Tentar mesmo assim' : '🤖 Forçar execução'}
+              </button>
             </div>
           </motion.div>
         </motion.div>
