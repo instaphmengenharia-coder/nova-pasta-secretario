@@ -122,7 +122,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.erro || data.message || 'Erro ao entregar')
+      if (!res.ok || data.erro) throw new Error(data.erro || data.message || 'Erro ao entregar')
       setDelivered(true)
     } catch (err) {
       setDeliverError(err.message)
