@@ -436,6 +436,7 @@ export function useBrowserAgent() {
           `URL DIRETA DA ATIVIDADE: ${task.alternateLink}`,
           task.dueDate ? `Prazo: ${new Date(task.dueDate).toLocaleString('pt-BR')}` : '',
           `Tipo: ${tipo}`,
+          opts?.objetivo ? `OBJETIVO DEFINIDO PELO ALUNO: ${opts.objetivo}` : '',
           `IMPORTANTE: Seu PRIMEIRO passo deve ser {"action":"navigate","url":"${task.alternateLink}"} — vá direto para esta URL, não use o menu do Classroom. Use "review" antes de submeter.`,
         ].filter(Boolean).join('\n'),
       }]

@@ -46,6 +46,16 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
   const [viabilidade, setViabilidade]             = useState(null)
   const [viabilidadeOpen, setViabilidadeOpen]     = useState(false)
   const [viabilidadeLoading, setViabilidadeLoading] = useState(false)
+
+  // ── Pre-chat states ──────────────────────────────────────────────────────
+  const [preChatOpen, setPreChatOpen]       = useState(false)
+  const [preChatMsgs, setPreChatMsgs]       = useState([])
+  const [preChatInput, setPreChatInput]     = useState('')
+  const [preChatLoading, setPreChatLoading] = useState(false)
+  const [preChatPlan, setPreChatPlan]       = useState(null)
+  const preChatObjetivoRef                  = useRef('')
+  const preChatEndRef                       = useRef(null)
+
   const { running, paused, log, done, pendingReview, elapsed, runAgent, stop, pause, resume, reset, approveReview, rejectReview } = useBrowserAgent()
 
   function fmtElapsed(s) {
@@ -62,14 +72,101 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
     } catch { return false }
   }
 
+  // ── Pre-chat helpers ──────────────────────────────────────────────────────
+  const PC_API  = 'https://api.anthropic.com/v1/messages'
+  const PC_MODEL = import.meta.env.VITE_MODEL_HAIKU || 'claude-haiku-4-5-20251001'
+  const PC_SYSTEM = `Você prepara um agente de IA para executar atividades escolares automaticamente no Chrome.
+Atividade — Título: ${task.title} | Disciplina: ${task.courseName || ''} | Descrição: ${(task.description || 'Sem descrição').slice(0, 400)}
+
+TAREFA: Faça no MÁXIMO 2 perguntas curtas (em português) para entender como o aluno quer que a atividade seja feita. Se já estiver claro, vá direto para o plano.
+Responda APENAS com JSON válido:
+- Pergunta: {"fase":"pergunta","texto":"sua pergunta"}
+- Plano final: {"fase":"plano","texto":"Vou [descrição do que farei]. Posso começar?","objetivo":"objetivo em 1 frase para o agente","tokens_estimados":7000}`
+
+  function parsePCJson(raw) {
+    try { return JSON.parse(raw.trim()) } catch {}
+    const m = raw.match(/\{[\s\S]*\}/)
+    if (m) { try { return JSON.parse(m[0]) } catch {} }
+    return { fase: 'pergunta', texto: raw }
+  }
+
+  function addPCMsg(role, texto, raw) {
+    setPreChatMsgs(prev => [...prev, { role, texto, raw }])
+    setTimeout(() => preChatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+  }
+
+  async function callHaikuPC(history) {
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+    const res = await fetch(PC_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: PC_MODEL, max_tokens: 400, system: PC_SYSTEM, messages: history }),
+    })
+    if (!res.ok) throw new Error(`API ${res.status}`)
+    const data = await res.json()
+    return data.content[0].text
+  }
+
+  async function abrirPreChat() {
+    setPreChatOpen(true)
+    setPreChatMsgs([])
+    setPreChatPlan(null)
+    setPreChatInput('')
+    preChatObjetivoRef.current = ''
+    setPreChatLoading(true)
+    try {
+      const text = await callHaikuPC([{ role: 'user', content: 'Analise a atividade e comece.' }])
+      const parsed = parsePCJson(text)
+      addPCMsg('assistant', parsed.texto || text, parsed)
+      if (parsed.fase === 'plano') setPreChatPlan(parsed)
+    } catch {
+      addPCMsg('assistant', 'Entendido! Posso começar a executar agora. Tem alguma instrução especial?', null)
+    } finally {
+      setPreChatLoading(false)
+    }
+  }
+
+  async function enviarMensagemPC() {
+    if (!preChatInput.trim() || preChatLoading) return
+    const txt = preChatInput.trim()
+    setPreChatInput('')
+    addPCMsg('user', txt, null)
+    setPreChatLoading(true)
+    const history = [...preChatMsgs, { role: 'user', texto: txt }].map(m => ({
+      role: m.role,
+      content: m.role === 'assistant' && m.raw ? JSON.stringify(m.raw) : m.texto,
+    }))
+    try {
+      const text = await callHaikuPC(history)
+      const parsed = parsePCJson(text)
+      addPCMsg('assistant', parsed.texto || text, parsed)
+      if (parsed.fase === 'plano') setPreChatPlan(parsed)
+    } catch {
+      addPCMsg('assistant', 'Entendido! Confirme para começar.', { fase: 'plano', texto: 'Pronto para executar a atividade.', objetivo: txt, tokens_estimados: 6000 })
+    } finally {
+      setPreChatLoading(false)
+    }
+  }
+
+  function confirmarPlanoPC() {
+    preChatObjetivoRef.current = preChatPlan?.objetivo || ''
+    setPreChatOpen(false)
+    if (hasPermission()) setAgentOpen(true)
+    else setPermissionOpen(true)
+  }
+
+  function ajustarPlanoPC() {
+    setPreChatPlan(null)
+    addPCMsg('assistant', 'Claro! O que você gostaria de ajustar?', null)
+  }
+
   async function handleAgentClick(e) {
     e.stopPropagation()
     reset()
     const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
     if (!apiKey) {
-      if (hasPermission()) setAgentOpen(true)
-      else setPermissionOpen(true)
-      return
+      if (hasPermission()) { await abrirPreChat(); return }
+      setPermissionOpen(true); return
     }
     setViabilidadeLoading(true)
     setViabilidade(null)
@@ -79,13 +176,10 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
       if (!analise.possivel && analise.confianca === 'alta') {
         setViabilidadeOpen(true)
       } else {
-        if (hasPermission()) setAgentOpen(true)
-        else setPermissionOpen(true)
+        await abrirPreChat()
       }
     } catch {
-      // se análise falhar, deixa tentar mesmo assim
-      if (hasPermission()) setAgentOpen(true)
-      else setPermissionOpen(true)
+      await abrirPreChat()
     } finally {
       setViabilidadeLoading(false)
     }
@@ -93,8 +187,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
 
   function handleExecutarMesmoAssim() {
     setViabilidadeOpen(false)
-    if (hasPermission()) setAgentOpen(true)
-    else setPermissionOpen(true)
+    abrirPreChat()
   }
 
   function grantPermission() {
@@ -525,6 +618,105 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
       )}
       </AnimatePresence>
 
+      {/* ── Pre-Chat Modal ── */}
+      <AnimatePresence>
+      {preChatOpen && (
+        <motion.div style={styles.overlay}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={() => setPreChatOpen(false)}
+        >
+          <motion.div style={{ ...styles.modal, maxWidth: 520, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 15 }}>💬 Antes de começar...</h3>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: '#888' }}>{task.title}</p>
+              </div>
+              <button onClick={() => setPreChatOpen(false)} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#888' }}>✕</button>
+            </div>
+
+            {/* Chat messages */}
+            <div style={{ flex: 1, overflowY: 'auto', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 120, maxHeight: 300 }}>
+              {preChatMsgs.length === 0 && preChatLoading && (
+                <div style={{ color: '#888', fontSize: 13, fontStyle: 'italic', padding: 8 }}>Analisando a atividade...</div>
+              )}
+              {preChatMsgs.map((msg, i) => (
+                <div key={i} style={{
+                  display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                }}>
+                  <div style={{
+                    background: msg.role === 'user' ? '#1a73e8' : '#f1f3f4',
+                    color: msg.role === 'user' ? '#fff' : '#222',
+                    borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                    padding: '8px 12px', fontSize: 13, maxWidth: '85%', lineHeight: 1.5,
+                  }}>
+                    {msg.texto}
+                  </div>
+                </div>
+              ))}
+              {preChatLoading && preChatMsgs.length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div style={{ background: '#f1f3f4', borderRadius: '16px 16px 16px 4px', padding: '8px 14px', fontSize: 18, color: '#888' }}>···</div>
+                </div>
+              )}
+              <div ref={preChatEndRef} />
+            </div>
+
+            {/* Plan card */}
+            {preChatPlan && (
+              <div style={{ background: '#e8f0fe', border: '1px solid #1a73e8', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1a73e8', marginBottom: 6 }}>📋 Plano de execução</div>
+                <div style={{ fontSize: 13, color: '#1a1a2e', lineHeight: 1.5, marginBottom: 8 }}>{preChatPlan.texto}</div>
+                {preChatPlan.tokens_estimados && (
+                  <div style={{ fontSize: 11, color: '#555' }}>
+                    ~{preChatPlan.tokens_estimados.toLocaleString()} tokens estimados
+                    {' '}(≈ USD ${((preChatPlan.tokens_estimados / 1000000) * 3).toFixed(4)})
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Confirm buttons (when plan ready) */}
+            {preChatPlan ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={ajustarPlanoPC}
+                  style={{ flex: 1, background: '#f1f3f4', border: '1px solid #dadce0', borderRadius: 8, padding: '10px 0', fontSize: 13, cursor: 'pointer', color: '#444', fontWeight: 600 }}>
+                  ✏️ Quero ajustar
+                </button>
+                <button onClick={confirmarPlanoPC}
+                  style={{ flex: 2, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
+                  ✅ Sim, pode começar
+                </button>
+              </div>
+            ) : (
+              /* Input */
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={preChatInput}
+                  onChange={e => setPreChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && enviarMensagemPC()}
+                  placeholder="Responda aqui..."
+                  disabled={preChatLoading}
+                  style={{ flex: 1, border: '1px solid #dadce0', borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none' }}
+                />
+                <button onClick={enviarMensagemPC} disabled={preChatLoading || !preChatInput.trim()}
+                  style={{ background: '#1a73e8', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, fontSize: 14, cursor: 'pointer', opacity: preChatLoading || !preChatInput.trim() ? 0.5 : 1 }}>
+                  →
+                </button>
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
       {/* ── Agente Chrome Modal ── */}
       <AnimatePresence>
       {agentOpen && (
@@ -610,7 +802,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {!running && !done && (
                 <button style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-                  onClick={() => runAgent(task, { userId }, viabilidade)}>▶ Iniciar Agente</button>
+                  onClick={() => runAgent(task, { userId, objetivo: preChatObjetivoRef.current }, viabilidade)}>▶ Iniciar Agente</button>
               )}
               {running && !paused && (
                 <>
