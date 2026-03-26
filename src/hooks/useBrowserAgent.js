@@ -5,9 +5,9 @@ const CLAUDE_API  = 'https://api.anthropic.com/v1/messages'
 const AGENT_URL   = 'https://agente-servidor-production.up.railway.app'
 const MODEL       = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-20250514'
 const MODEL_HAIKU = import.meta.env.VITE_MODEL_HAIKU  || 'claude-haiku-4-5-20251001'
-const MAX_STEPS   = 80
 const MAX_RETRIES = 3
 const RETRY_DELAY = 3000
+const CMD_TIMEOUT = 300000 // 5 minutos por ação
 
 // Global mutex — only one agent can call Claude at a time
 let globalAgentLock = false
@@ -208,8 +208,8 @@ function sendExtCmdOnce(cmd) {
     const reqId = Math.random().toString(36).slice(2)
     const timeout = setTimeout(() => {
       window.removeEventListener('message', handler)
-      reject(new Error('Timeout: extensão não respondeu em 30s'))
-    }, 30000)
+      reject(new Error(`Timeout: extensão não respondeu em ${CMD_TIMEOUT / 60000}min`))
+    }, CMD_TIMEOUT)
     function handler(e) {
       if (e.data?.type === 'SE_RESULT' && e.data.reqId === reqId) {
         clearTimeout(timeout)
@@ -324,9 +324,12 @@ export function useBrowserAgent() {
   const [done, setDone]                   = useState(null)
   const [taskType, setTaskType]           = useState(null)
   const [pendingReview, setPendingReview] = useState(null)
-  const abortRef  = useRef(false)
-  const pauseRef  = useRef(false)
-  const reviewRef = useRef(null)
+  const [elapsed, setElapsed]             = useState(0)
+  const abortRef    = useRef(false)
+  const pauseRef    = useRef(false)
+  const reviewRef   = useRef(null)
+  const startedAtRef = useRef(null)
+  const elapsedTimer = useRef(null)
 
   const addLog = useCallback((type, content) => {
     setLog(prev => [...prev, { type, content, id: Math.random() }])
@@ -360,8 +363,13 @@ export function useBrowserAgent() {
     setDone(null)
     setTaskType(null)
     setPendingReview(null)
+    setElapsed(0)
     abortRef.current = false
     pauseRef.current = false
+    startedAtRef.current = Date.now()
+    elapsedTimer.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000))
+    }, 1000)
 
     let agentStatus = 'failed'
     let agentResult = ''
@@ -411,8 +419,8 @@ export function useBrowserAgent() {
       let steps = 0
       let finished = false
 
-      // ── 4. Loop principal ──────────────────────────────────────────────────
-      while (steps < MAX_STEPS && !abortRef.current && !finished) {
+      // ── 4. Loop principal — sem limite de passos ───────────────────────────
+      while (!abortRef.current && !finished) {
         await waitIfPaused()
         if (abortRef.current) break
         steps++
@@ -510,9 +518,6 @@ export function useBrowserAgent() {
         messages.push({ role: 'user', content: `Resultado: ${resultStr.slice(0, 800)}` })
       }
 
-      if (steps >= MAX_STEPS && !finished) {
-        addLog('error', `Limite de ${MAX_STEPS} passos atingido`)
-      }
       if (abortRef.current && !finished) {
         agentStatus = 'cancelled'
         addLog('info', '⛔ Agente parado pelo usuário')
@@ -520,9 +525,22 @@ export function useBrowserAgent() {
     } catch (err) {
       addLog('error', `Erro fatal: ${err.message}`)
     } finally {
+      clearInterval(elapsedTimer.current)
+      elapsedTimer.current = null
       setRunning(false)
       setPaused(false)
       saveHistory(task, agentStatus, agentResult || done, viabilidade)
+
+      // Contabiliza atividade no plano APENAS se concluída com sucesso
+      if (agentStatus === 'success' && opts?.userId) {
+        try {
+          await fetch(`${AGENT_URL}/atividade/incrementar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: opts.userId }),
+          })
+        } catch { /* silencioso — não pode bloquear o finally */ }
+      }
     }
   }, [addLog])
 
@@ -534,6 +552,8 @@ export function useBrowserAgent() {
     setPendingReview(null)
     setPaused(false)
     setRunning(false)
+    clearInterval(elapsedTimer.current)
+    elapsedTimer.current = null
   }, [])
 
   const pause = useCallback(() => {
@@ -560,5 +580,5 @@ export function useBrowserAgent() {
     reviewRef.current = null
   }, [])
 
-  return { running, paused, log, done, taskType, pendingReview, runAgent, stop, pause, resume, reset, approveReview, rejectReview }
+  return { running, paused, log, done, taskType, pendingReview, elapsed, runAgent, stop, pause, resume, reset, approveReview, rejectReview }
 }

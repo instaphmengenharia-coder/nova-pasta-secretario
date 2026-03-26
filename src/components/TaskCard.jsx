@@ -46,7 +46,12 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
   const [viabilidade, setViabilidade]             = useState(null)
   const [viabilidadeOpen, setViabilidadeOpen]     = useState(false)
   const [viabilidadeLoading, setViabilidadeLoading] = useState(false)
-  const { running, paused, log, done, pendingReview, runAgent, stop, pause, resume, reset, approveReview, rejectReview } = useBrowserAgent()
+  const { running, paused, log, done, pendingReview, elapsed, runAgent, stop, pause, resume, reset, approveReview, rejectReview } = useBrowserAgent()
+
+  function fmtElapsed(s) {
+    if (s < 60) return `${s}s`
+    return `${Math.floor(s / 60)}m ${s % 60}s`
+  }
   const agentLogRef = useRef(null)
 
   function hasPermission() {
@@ -539,7 +544,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <h3 style={{ margin: 0, fontSize: 15 }}>🤖 Agente Chrome</h3>
-                {running && !paused && <span style={{ fontSize: 11, background: '#e8f5e9', color: '#1e7e34', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>● Executando</span>}
+                {running && !paused && <span style={{ fontSize: 11, background: '#e8f5e9', color: '#1e7e34', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>⚙️ Executando há {fmtElapsed(elapsed)}</span>}
                 {paused && <span style={{ fontSize: 11, background: '#fff3cd', color: '#856404', padding: '2px 8px', borderRadius: 20, fontWeight: 600 }}>⏸ Pausado</span>}
               </div>
               <div style={{ display: 'flex', gap: 6 }}>

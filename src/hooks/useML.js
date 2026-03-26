@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const HAIKU_MODEL = 'claude-haiku-4-5'
+const HAIKU_MODEL = import.meta.env.VITE_MODEL_HAIKU || 'claude-haiku-4-5-20251001'
 const LS_DIFFICULTY = 'se_difficulty'
 const LS_HISTORY    = 'se_history'
 const LS_PATTERNS   = 'se_patterns'

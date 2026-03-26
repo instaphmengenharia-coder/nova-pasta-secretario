@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 
 const CLAUDE_API = 'https://api.anthropic.com/v1/messages'
-const MODEL = 'claude-sonnet-4-20250514'
+const MODEL = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-20250514'
 
 async function callClaude(prompt) {
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
