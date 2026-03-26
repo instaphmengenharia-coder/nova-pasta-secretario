@@ -62,7 +62,7 @@ export async function analisarViabilidade(task, apiKey) {
 export function getAgentHistory() {
   try { return JSON.parse(localStorage.getItem('se_agent_history') || '[]') } catch { return [] }
 }
-function saveHistory(task, status, result, analise_viabilidade) {
+function saveHistory(task, status, result, analise_viabilidade, screenshot) {
   const history = getAgentHistory()
   history.unshift({
     id: Math.random().toString(36).slice(2),
@@ -73,6 +73,7 @@ function saveHistory(task, status, result, analise_viabilidade) {
     status,
     result,
     analise_viabilidade,
+    screenshot: screenshot || null,
   })
   localStorage.setItem('se_agent_history', JSON.stringify(history.slice(0, 100)))
 }
@@ -102,6 +103,15 @@ REGRAS CRÍTICAS:
 - se detectar login do Google: use "login_required"
 - após ação falhar: tente seletor alternativo antes de desistir
 - NÃO clique em links de navegação/menu — foque apenas na atividade atual
+
+FLUXO OBRIGATÓRIO APÓS review_approved:
+1. fill no campo de texto com a resposta aprovada
+2. screenshot para confirmar que foi preenchido
+3. click no botão "Entregar" ou "Turn in" ou "Marcar como concluído"
+4. aguardar 1s → screenshot para confirmar entrega
+5. Se aparecer modal de confirmação: click em "Entregar" novamente
+6. done() com resumo do que foi feito — SÓ chame done() após confirmar entrega
+
 - Responda APENAS com JSON. Sem markdown, sem texto.`
 
 const PROMPTS = {
@@ -262,8 +272,7 @@ async function sendExtCmd(cmd, addLog, attempt = 1) {
   }
 }
 
-// Passos mecânicos que não precisam raciocinar sobre conteúdo → Haiku (20x mais barato)
-const HAIKU_ACTIONS = new Set(['click', 'fill', 'wait', 'evaluate', 'navigate', 'screenshot'])
+// Resultado curto → ação mecânica → Haiku; resultado longo (read_page) → Sonnet
 function chooseModel(lastUserMsg) {
   if (!lastUserMsg) return MODEL // primeiro passo → Sonnet
   const txt = typeof lastUserMsg === 'string' ? lastUserMsg : lastUserMsg?.content || ''
@@ -274,10 +283,41 @@ function chooseModel(lastUserMsg) {
 }
 
 // ─── Claude API ───────────────────────────────────────────────────────────────
+async function summarizeOldMessages(apiKey, messages) {
+  // Comprime as mensagens mais antigas em um resumo com Haiku
+  const toSummarize = messages.slice(0, -4) // mantém últimas 4 intactas
+  if (toSummarize.length < 3) return messages
+  try {
+    const res = await fetch(CLAUDE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: MODEL_HAIKU, max_tokens: 200,
+        messages: [{ role: 'user', content: `Resuma em 3-4 frases o que o agente fez até agora nesta sessão:\n${toSummarize.map(m => `[${m.role}]: ${String(m.content).slice(0, 150)}`).join('\n')}` }],
+      }),
+    })
+    if (!res.ok) return messages
+    const data = await res.json()
+    const summary = data.content[0].text
+    return [
+      { role: 'user', content: `[RESUMO DO QUE JÁ FOI FEITO]: ${summary}` },
+      { role: 'assistant', content: 'Entendido. Continuando de onde paramos.' },
+      ...messages.slice(-4),
+    ]
+  } catch { return messages }
+}
+
 async function callClaude(apiKey, messages, systemPrompt, retry = 0) {
   await acquireLock()
-  // Keep only last 5 messages to avoid token bloat
-  const trimmed = messages.length > 5 ? messages.slice(-5) : messages
+  // Comprime histórico quando fica longo (>10 mensagens)
+  let trimmed = messages
+  if (messages.length > 10) {
+    releaseLock()
+    trimmed = await summarizeOldMessages(apiKey, messages)
+    await acquireLock()
+  } else if (messages.length > 5) {
+    trimmed = messages.slice(-5)
+  }
   const lastUser = [...trimmed].reverse().find(m => m.role === 'user')
   const model = chooseModel(lastUser?.content)
   const res = await fetch(CLAUDE_API, {
@@ -351,11 +391,15 @@ export function useBrowserAgent() {
   const [taskType, setTaskType]           = useState(null)
   const [pendingReview, setPendingReview] = useState(null)
   const [elapsed, setElapsed]             = useState(0)
-  const abortRef    = useRef(false)
-  const pauseRef    = useRef(false)
-  const reviewRef   = useRef(null)
-  const startedAtRef = useRef(null)
-  const elapsedTimer = useRef(null)
+  const [queue, setQueue]                 = useState([])   // [{task, opts, viabilidade}]
+  const [queueRunning, setQueueRunning]   = useState(false)
+  const abortRef       = useRef(false)
+  const pauseRef       = useRef(false)
+  const reviewRef      = useRef(null)
+  const startedAtRef   = useRef(null)
+  const elapsedTimer   = useRef(null)
+  const lastScreenshot = useRef(null)
+  const queueRef       = useRef([])
 
   const addLog = useCallback((type, content) => {
     setLog(prev => [...prev, { type, content, id: Math.random() }])
@@ -554,6 +598,7 @@ export function useBrowserAgent() {
 
           if (action.action === 'screenshot' && result?.screenshot) {
             addLog('screenshot', result.screenshot)
+            lastScreenshot.current = result.screenshot
             messages.push({ role: 'user', content: 'Resultado: screenshot capturado.' })
             continue
           }
@@ -567,7 +612,10 @@ export function useBrowserAgent() {
             await new Promise(r => setTimeout(r, 1500))
             try {
               const ss = await sendExtCmdOnce({ action: 'screenshot' })
-              if (ss?.screenshot) addLog('screenshot', ss.screenshot)
+              if (ss?.screenshot) {
+                addLog('screenshot', ss.screenshot)
+                lastScreenshot.current = ss.screenshot
+              }
             } catch { /* silent */ }
           }
         } catch (err) {
@@ -590,17 +638,32 @@ export function useBrowserAgent() {
       elapsedTimer.current = null
       setRunning(false)
       setPaused(false)
-      saveHistory(task, agentStatus, agentResult || done, viabilidade)
+      saveHistory(task, agentStatus, agentResult || done, viabilidade, lastScreenshot.current)
+      lastScreenshot.current = null
 
-      // Contabiliza atividade no plano APENAS se concluída com sucesso
-      if (agentStatus === 'success' && opts?.userId) {
-        try {
-          await fetch(`${AGENT_URL}/atividade/incrementar`, {
+      if (agentStatus === 'success') {
+        // Contabiliza atividade no plano
+        if (opts?.userId) {
+          fetch(`${AGENT_URL}/atividade/incrementar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: opts.userId }),
-          })
-        } catch { /* silencioso — não pode bloquear o finally */ }
+          }).catch(() => {})
+        }
+        // Notifica WhatsApp quando termina com sucesso
+        if (opts?.whatsappPhone) {
+          fetch(`${AGENT_URL}/whatsapp/notificar`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telefone: opts.whatsappPhone,
+              nomeAluno: opts.nomeAluno || 'Aluno',
+              tituloAtividade: task.title,
+              disciplina: task.courseName,
+              mensagem: `✅ Atividade "${task.title}" entregue com sucesso pelo Secretário Escolar!`,
+            }),
+          }).catch(() => {})
+        }
       }
     }
   }, [addLog])
@@ -641,5 +704,32 @@ export function useBrowserAgent() {
     reviewRef.current = null
   }, [])
 
-  return { running, paused, log, done, taskType, pendingReview, elapsed, runAgent, stop, pause, resume, reset, approveReview, rejectReview }
+  // ── Fila de execução ────────────────────────────────────────────────────────
+  const addToQueue = useCallback((task, opts = {}, viabilidade = null) => {
+    const item = { task, opts, viabilidade }
+    queueRef.current = [...queueRef.current, item]
+    setQueue([...queueRef.current])
+  }, [])
+
+  const processQueue = useCallback(async () => {
+    if (queueRunning || queueRef.current.length === 0) return
+    setQueueRunning(true)
+    while (queueRef.current.length > 0) {
+      const [next, ...rest] = queueRef.current
+      queueRef.current = rest
+      setQueue([...rest])
+      reset()
+      await runAgent(next.task, next.opts, next.viabilidade)
+      // Pausa 2s entre atividades
+      if (rest.length > 0) await new Promise(r => setTimeout(r, 2000))
+    }
+    setQueueRunning(false)
+  }, [queueRunning, runAgent, reset])
+
+  const clearQueue = useCallback(() => {
+    queueRef.current = []
+    setQueue([])
+  }, [])
+
+  return { running, paused, log, done, taskType, pendingReview, elapsed, queue, queueRunning, runAgent, addToQueue, processQueue, clearQueue, stop, pause, resume, reset, approveReview, rejectReview }
 }

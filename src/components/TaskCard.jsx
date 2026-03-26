@@ -171,7 +171,17 @@ Responda APENAS com JSON válido:
     setViabilidadeLoading(true)
     setViabilidade(null)
     try {
-      const analise = await analisarViabilidade(task, apiKey)
+      // Cache por 24h — evita chamar Haiku toda vez
+      const cacheKey = `se_viability_${task.id}`
+      let analise = null
+      try {
+        const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null')
+        if (cached && Date.now() - cached.ts < 24 * 60 * 60 * 1000) analise = cached.data
+      } catch {}
+      if (!analise) {
+        analise = await analisarViabilidade(task, apiKey)
+        try { localStorage.setItem(cacheKey, JSON.stringify({ data: analise, ts: Date.now() })) } catch {}
+      }
       setViabilidade(analise)
       if (!analise.possivel && analise.confianca === 'alta') {
         setViabilidadeOpen(true)
@@ -802,7 +812,7 @@ Responda APENAS com JSON válido:
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {!running && !done && (
                 <button style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-                  onClick={() => runAgent(task, { userId, objetivo: preChatObjetivoRef.current }, viabilidade)}>▶ Iniciar Agente</button>
+                  onClick={() => runAgent(task, { userId, objetivo: preChatObjetivoRef.current, whatsappPhone, nomeAluno: task.studentName || '' }, viabilidade)}>▶ Iniciar Agente</button>
               )}
               {running && !paused && (
                 <>
