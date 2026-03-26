@@ -5,6 +5,9 @@ import { useClaudeAI } from './hooks/useClaudeAI'
 import { useML } from './hooks/useML'
 import { useAutoAgent } from './hooks/useAutoAgent'
 import TaskCard from './components/TaskCard'
+import Dashboard from './components/Dashboard'
+import Precos from './components/Precos'
+import { buscarPlanoUsuario } from './hooks/usePlano'
 
 const COURSE_COLORS = [
   '#1a73e8','#e91e63','#9c27b0','#ff5722',
@@ -86,6 +89,7 @@ export default function App() {
   const [autoMode, setAutoMode] = useState(() => localStorage.getItem('se_auto') === '1')
   const [extConnected, setExtConnected] = useState(false)
   const [showExtModal, setShowExtModal] = useState(false)
+  const [planoInfo, setPlanoInfo] = useState({ plano: 'free', atividades_mes: 0, validade_ate: null })
 
   const [solutions, setSolutions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('se_solutions') || '{}') } catch { return {} }
@@ -136,6 +140,12 @@ export default function App() {
     }
   }, [autoDone])
 
+  // ── Plano do usuário ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return
+    buscarPlanoUsuario(user.id).then(setPlanoInfo).catch(() => {})
+  }, [isAuthenticated, user?.id])
+
   // ── Dark mode ──────────────────────────────────────────────────────────────
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -146,19 +156,31 @@ export default function App() {
   useEffect(() => {
     if (!isAuthenticated) return
 
+    let pendingTimeout = null
+
     function checkExt() {
+      // Se não responder em 1.5s, considera desconectado
+      clearTimeout(pendingTimeout)
+      pendingTimeout = setTimeout(() => setExtConnected(false), 1500)
       window.postMessage({ type: 'SE_GET_STATUS' }, '*')
     }
 
     function onMessage(e) {
       if (e.data?.type === 'SE_EXT_PRESENT') checkExt()
-      if (e.data?.type === 'SE_STATUS') setExtConnected(!!e.data.connected)
+      if (e.data?.type === 'SE_STATUS') {
+        clearTimeout(pendingTimeout)
+        setExtConnected(!!e.data.connected)
+      }
     }
 
     window.addEventListener('message', onMessage)
     checkExt()
-    const iv = setInterval(checkExt, 4000)
-    return () => { window.removeEventListener('message', onMessage); clearInterval(iv) }
+    const iv = setInterval(checkExt, 2000)
+    return () => {
+      window.removeEventListener('message', onMessage)
+      clearInterval(iv)
+      clearTimeout(pendingTimeout)
+    }
   }, [isAuthenticated])
 
   // ── Notifications: request permission on login ─────────────────────────────
@@ -475,6 +497,25 @@ export default function App() {
             >
               {autoMode ? '🤖 AUTO ON' : '🤖 AUTO'}
             </button>
+            {/* Indicador de plano */}
+            {planoInfo.plano === 'free' ? (
+              <button onClick={() => setTab('PRECOS')} style={{
+                background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 20,
+                padding: '4px 12px', fontSize: 11, fontWeight: 700, color: '#e65100',
+                cursor: 'pointer', fontFamily: FONT,
+              }}>
+                {2 - (planoInfo.atividades_mes || 0) <= 0 ? '0/2 — Fazer upgrade' : `${2 - (planoInfo.atividades_mes || 0)}/2 restantes`}
+              </button>
+            ) : (
+              <div style={{
+                background: planoInfo.plano === 'premium' ? '#f3e5f5' : '#e8f0fe',
+                border: `1px solid ${planoInfo.plano === 'premium' ? '#ce93d8' : '#90caf9'}`,
+                borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 700,
+                color: planoInfo.plano === 'premium' ? '#7b1fa2' : '#1565c0',
+              }}>
+                {planoInfo.plano === 'premium' ? '💎 Premium' : '⭐ Pro'}
+              </div>
+            )}
             {user && (
               <div style={s.userInfo}>
                 {user.photo
@@ -494,6 +535,8 @@ export default function App() {
             ['DONE', 'Entregues', doneTasks.length],
             ['NOTICES', '📢 Avisos', allNotices.length],
             ['PLAN', 'Plano Semanal', null],
+            ['DASHBOARD', '📊 Histórico', null],
+            ['PRECOS', '💎 Planos', null],
           ].map(([key, label, count]) => (
             <button key={key} style={s.tab(tab === key)} onClick={() => setTab(key)}>
               {label}
@@ -943,6 +986,14 @@ export default function App() {
               </div>
             )}
           </motion.div>
+        )}
+        {/* Dashboard tab */}
+        {tab === 'DASHBOARD' && (
+          <Dashboard tasks={tasks} />
+        )}
+        {/* Precos tab */}
+        {tab === 'PRECOS' && (
+          <Precos user={user} planoAtual={planoInfo.plano} onVoltar={() => setTab('ASSIGNED')} />
         )}
         </AnimatePresence>
 

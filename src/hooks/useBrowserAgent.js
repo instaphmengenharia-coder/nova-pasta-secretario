@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef } from 'react'
-import { buscarEstilo } from './useStyleMemory'
+import { buscarEstilo, getFeedbackContexto } from './useStyleMemory'
 
 const CLAUDE_API  = 'https://api.anthropic.com/v1/messages'
 const AGENT_URL   = 'https://agente-servidor-production.up.railway.app'
-const MODEL       = 'claude-sonnet-4-20250514'
-const MODEL_HAIKU = 'claude-haiku-4-5-20251001'
+const MODEL       = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-20250514'
+const MODEL_HAIKU = import.meta.env.VITE_MODEL_HAIKU  || 'claude-haiku-4-5-20251001'
 const MAX_STEPS   = 30
 const MAX_RETRIES = 3
 const RETRY_DELAY = 3000
@@ -381,8 +381,12 @@ export function useBrowserAgent() {
         }
       }
 
+      // Feedback de notas anteriores
+      const feedbackContexto = getFeedbackContexto(task.courseName)
+      if (feedbackContexto) addLog('info', '📊 Feedback de notas anteriores carregado')
+
       // ── 3. Montar system prompt especializado ──────────────────────────────
-      const systemPrompt = getPrompt(tipo) + estiloContexto
+      const systemPrompt = getPrompt(tipo) + estiloContexto + feedbackContexto
 
       const messages = [{
         role: 'user',
@@ -452,9 +456,16 @@ export function useBrowserAgent() {
               })
               addLog('info', '✅ Aluno aprovou — enviando resposta...')
               messages.push({ role: 'user', content: 'Resultado: review_approved — aluno aprovou. Continue preenchendo e submetendo.' })
-            } catch {
-              addLog('warn', '❌ Aluno rejeitou a resposta — agente parado.')
-              agentStatus = 'rejected'
+            } catch (err) {
+              if (err.message === 'Aluno rejeitou a resposta') {
+                addLog('warn', '❌ Aluno rejeitou a resposta — agente parado.')
+                agentStatus = 'rejected'
+              } else if (err.message === 'Parado') {
+                agentStatus = 'cancelled'
+              } else {
+                addLog('error', `❌ Erro inesperado na revisão: ${err.message}`)
+                agentStatus = 'failed'
+              }
               finished = true
             }
           }
