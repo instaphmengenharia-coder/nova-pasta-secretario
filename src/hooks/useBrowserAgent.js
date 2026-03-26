@@ -5,7 +5,7 @@ const CLAUDE_API  = 'https://api.anthropic.com/v1/messages'
 const AGENT_URL   = 'https://agente-servidor-production.up.railway.app'
 const MODEL       = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-20250514'
 const MODEL_HAIKU = import.meta.env.VITE_MODEL_HAIKU  || 'claude-haiku-4-5-20251001'
-const MAX_STEPS   = 30
+const MAX_STEPS   = 80
 const MAX_RETRIES = 3
 const RETRY_DELAY = 3000
 
@@ -93,11 +93,15 @@ AÇÕES DISPONÍVEIS:
 - {"action": "done", "result": "resumo do que foi feito"}
 - {"action": "login_required"}
 
-REGRAS:
+REGRAS CRÍTICAS:
+- PRIMEIRO passo: sempre navigate direto para a URL da atividade fornecida — NUNCA navegue pelo menu do Classroom
+- Se a página aberta for o Classroom home/lista de cursos: navegue IMEDIATAMENTE para a URL correta da atividade
 - screenshot após cada navigate (para ver o que abriu)
-- use "review" OBRIGATORIAMENTE antes de submeter qualquer resposta
+- read_page para entender o conteúdo da atividade
+- use "review" OBRIGATORIAMENTE antes de submeter qualquer resposta — mostre a resposta completa ao aluno
 - se detectar login do Google: use "login_required"
 - após ação falhar: tente seletor alternativo antes de desistir
+- NÃO clique em links de navegação/menu — foque apenas na atividade atual
 - Responda APENAS com JSON. Sem markdown, sem texto.`
 
 const PROMPTS = {
@@ -395,10 +399,10 @@ export function useBrowserAgent() {
           `Título: ${task.title}`,
           `Disciplina: ${task.courseName}`,
           `Descrição: ${(task.description || 'Sem descrição').slice(0, 400)}`,
-          `URL: ${task.alternateLink}`,
+          `URL DIRETA DA ATIVIDADE: ${task.alternateLink}`,
           task.dueDate ? `Prazo: ${new Date(task.dueDate).toLocaleString('pt-BR')}` : '',
           `Tipo: ${tipo}`,
-          `Comece navegando para a URL. Use "review" antes de submeter.`,
+          `IMPORTANTE: Seu PRIMEIRO passo deve ser {"action":"navigate","url":"${task.alternateLink}"} — vá direto para esta URL, não use o menu do Classroom. Use "review" antes de submeter.`,
         ].filter(Boolean).join('\n'),
       }]
 
