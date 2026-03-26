@@ -43,7 +43,7 @@ export async function analisarViabilidade(task, apiKey) {
       max_tokens: 350,
       messages: [{
         role: 'user',
-        content: `Analisa essa atividade escolar e diz se é possível fazer automaticamente por um agente de IA que controla o Chrome.\n\n${enunciado}\n\nIMPOSSÍVEL: livro físico sem PDF, pesquisa de campo, entrevista presencial, foto/vídeo do aluno, prova presencial, enunciado vazio.\nPOSSÍVEL COM AVISO: PDF/Doc anexado, site externo, matemática complexa.\n\nResponde APENAS com JSON válido, sem markdown:\n{"possivel":true,"confianca":"alta","motivo":"explicação em 1-2 frases","precisa_de":[],"estrategia":"como resolver"}`,
+        content: `Analisa essa atividade escolar e diz se é possível fazer automaticamente por um agente de IA que controla o Chrome e preenche campos de texto.\n\n${enunciado}\n\nREGRA PRINCIPAL: considere POSSÍVEL a menos que seja fisicamente impossível para um agente digital.\n\nIMPOSSÍVEL (apenas estes casos exatos):\n- Exige foto/selfie/vídeo DO ALUNO como entrega\n- Exige presença física (lab, campo, escola)\n- Enunciado completamente vazio sem nenhuma informação\n\nTUDO O MAIS É POSSÍVEL — atividades de redação, gramática, múltipla escolha, resumo, pesquisa, exercícios de idioma, matemática, formulário online — MESMO que mencione caderno ou livro no enunciado (o agente preenche o campo de resposta no Classroom).\n\nResponde APENAS com JSON válido, sem markdown:\n{"possivel":true,"confianca":"alta","motivo":"explicação em 1-2 frases","precisa_de":[],"estrategia":"como resolver"}`,
       }],
     }),
   })

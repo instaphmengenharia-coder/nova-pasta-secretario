@@ -76,7 +76,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
     try {
       const analise = await analisarViabilidade(task, apiKey)
       setViabilidade(analise)
-      if (!analise.possivel || analise.confianca === 'baixa') {
+      if (!analise.possivel && analise.confianca === 'alta') {
         setViabilidadeOpen(true)
       } else {
         if (hasPermission()) setAgentOpen(true)
