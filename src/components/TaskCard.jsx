@@ -73,7 +73,7 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
   }
 
   // ── Pre-chat helpers ──────────────────────────────────────────────────────
-  const PC_API  = 'https://api.anthropic.com/v1/messages'
+  const PC_API  = 'https://agente-servidor-production.up.railway.app/claude/proxy'
   const PC_MODEL = import.meta.env.VITE_MODEL_HAIKU || 'claude-haiku-4-5-20251001'
   const PC_SYSTEM = `Você prepara um agente de IA para executar atividades escolares automaticamente no Chrome.
 Atividade — Título: ${task.title} | Disciplina: ${task.courseName || ''} | Descrição: ${(task.description || 'Sem descrição').slice(0, 400)}
@@ -96,10 +96,9 @@ Responda APENAS com JSON válido:
   }
 
   async function callHaikuPC(history) {
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
     const res = await fetch(PC_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: PC_MODEL, max_tokens: 400, system: PC_SYSTEM, messages: history }),
     })
     if (!res.ok) throw new Error(`API ${res.status}`)
@@ -163,11 +162,7 @@ Responda APENAS com JSON válido:
   async function handleAgentClick(e) {
     e.stopPropagation()
     reset()
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-    if (!apiKey) {
-      if (hasPermission()) { await abrirPreChat(); return }
-      setPermissionOpen(true); return
-    }
+    if (!hasPermission()) { setPermissionOpen(true); return }
     setViabilidadeLoading(true)
     setViabilidade(null)
     try {
@@ -179,7 +174,7 @@ Responda APENAS com JSON válido:
         if (cached && Date.now() - cached.ts < 24 * 60 * 60 * 1000) analise = cached.data
       } catch {}
       if (!analise) {
-        analise = await analisarViabilidade(task, apiKey)
+        analise = await analisarViabilidade(task)
         try { localStorage.setItem(cacheKey, JSON.stringify({ data: analise, ts: Date.now() })) } catch {}
       }
       setViabilidade(analise)

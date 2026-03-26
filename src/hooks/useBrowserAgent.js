@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef } from 'react'
 import { buscarEstilo, getFeedbackContexto } from './useStyleMemory'
 
-const CLAUDE_API  = 'https://api.anthropic.com/v1/messages'
+// Todas as chamadas Claude passam pelo proxy Railway — API key nunca exposta no browser
+const CLAUDE_API  = 'https://agente-servidor-production.up.railway.app/claude/proxy'
 const AGENT_URL   = 'https://agente-servidor-production.up.railway.app'
 const MODEL       = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-20250514'
 const MODEL_HAIKU = import.meta.env.VITE_MODEL_HAIKU  || 'claude-haiku-4-5-20251001'
@@ -18,7 +19,7 @@ async function acquireLock() {
 function releaseLock() { globalAgentLock = false }
 
 // ─── Viability Analysis ───────────────────────────────────────────────────────
-export async function analisarViabilidade(task, apiKey) {
+export async function analisarViabilidade(task) {
   const materiais = task.materials?.length
     ? `Materiais: ${task.materials.map(m => m.title || m.driveFile?.title || 'arquivo').join(', ')}`
     : 'Sem materiais anexados'
@@ -32,12 +33,7 @@ export async function analisarViabilidade(task, apiKey) {
 
   const res = await fetch(CLAUDE_API, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: MODEL_HAIKU,
       max_tokens: 350,
@@ -283,14 +279,14 @@ function chooseModel(lastUserMsg) {
 }
 
 // ─── Claude API ───────────────────────────────────────────────────────────────
-async function summarizeOldMessages(apiKey, messages) {
+async function summarizeOldMessages(_apiKey, messages) {
   // Comprime as mensagens mais antigas em um resumo com Haiku
   const toSummarize = messages.slice(0, -4) // mantém últimas 4 intactas
   if (toSummarize.length < 3) return messages
   try {
     const res = await fetch(CLAUDE_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL_HAIKU, max_tokens: 200,
         messages: [{ role: 'user', content: `Resuma em 3-4 frases o que o agente fez até agora nesta sessão:\n${toSummarize.map(m => `[${m.role}]: ${String(m.content).slice(0, 150)}`).join('\n')}` }],
@@ -307,27 +303,23 @@ async function summarizeOldMessages(apiKey, messages) {
   } catch { return messages }
 }
 
-async function callClaude(apiKey, messages, systemPrompt, retry = 0) {
+async function callClaude(_apiKey, messages, systemPrompt, retry = 0) {
   await acquireLock()
   // Comprime histórico quando fica longo (>10 mensagens)
   let trimmed = messages
   if (messages.length > 10) {
     releaseLock()
-    trimmed = await summarizeOldMessages(apiKey, messages)
+    trimmed = await summarizeOldMessages(null, messages)
     await acquireLock()
   } else if (messages.length > 5) {
     trimmed = messages.slice(-5)
   }
   const lastUser = [...trimmed].reverse().find(m => m.role === 'user')
   const model = chooseModel(lastUser?.content)
+  // Proxy Railway — API key nunca vai ao browser
   const res = await fetch(CLAUDE_API, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, max_tokens: 512, system: systemPrompt, messages: trimmed }),
   })
   // Rate limit → aguarda e tenta de novo (até 3x, intervalo crescente)
@@ -335,13 +327,13 @@ async function callClaude(apiKey, messages, systemPrompt, retry = 0) {
     releaseLock()
     const wait = (retry + 1) * 20000 // 20s, 40s, 60s
     await new Promise(r => setTimeout(r, wait))
-    return callClaude(apiKey, messages, systemPrompt, retry + 1)
+    return callClaude(null, messages, systemPrompt, retry + 1)
   }
   // Erro de servidor temporário → 1 retry
   if ((res.status === 500 || res.status === 529) && retry < 2) {
     releaseLock()
     await new Promise(r => setTimeout(r, 10000))
-    return callClaude(apiKey, messages, systemPrompt, retry + 1)
+    return callClaude(null, messages, systemPrompt, retry + 1)
   }
   if (!res.ok) {
     releaseLock()
