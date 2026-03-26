@@ -262,11 +262,24 @@ async function sendExtCmd(cmd, addLog, attempt = 1) {
   }
 }
 
+// Passos mecânicos que não precisam raciocinar sobre conteúdo → Haiku (20x mais barato)
+const HAIKU_ACTIONS = new Set(['click', 'fill', 'wait', 'evaluate', 'navigate', 'screenshot'])
+function chooseModel(lastUserMsg) {
+  if (!lastUserMsg) return MODEL // primeiro passo → Sonnet
+  const txt = typeof lastUserMsg === 'string' ? lastUserMsg : lastUserMsg?.content || ''
+  // read_page retorna HTML/texto longo → Sonnet para raciocinar
+  if (txt.length > 300) return MODEL
+  // Resultado de ação mecânica curta → Haiku
+  return MODEL_HAIKU
+}
+
 // ─── Claude API ───────────────────────────────────────────────────────────────
 async function callClaude(apiKey, messages, systemPrompt, retry = 0) {
   await acquireLock()
-  // Keep only last 8 messages to avoid token bloat
-  const trimmed = messages.length > 8 ? messages.slice(-8) : messages
+  // Keep only last 5 messages to avoid token bloat
+  const trimmed = messages.length > 5 ? messages.slice(-5) : messages
+  const lastUser = [...trimmed].reverse().find(m => m.role === 'user')
+  const model = chooseModel(lastUser?.content)
   const res = await fetch(CLAUDE_API, {
     method: 'POST',
     headers: {
@@ -275,7 +288,7 @@ async function callClaude(apiKey, messages, systemPrompt, retry = 0) {
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: 512, system: systemPrompt, messages: trimmed }),
+    body: JSON.stringify({ model, max_tokens: 512, system: systemPrompt, messages: trimmed }),
   })
   if (res.status === 429 && retry < 3) {
     releaseLock()
@@ -531,7 +544,7 @@ export function useBrowserAgent() {
         }
 
         const resultStr = JSON.stringify(result)
-        messages.push({ role: 'user', content: `Resultado: ${resultStr.slice(0, 800)}` })
+        messages.push({ role: 'user', content: `Resultado: ${resultStr.slice(0, 400)}` })
       }
 
       if (abortRef.current && !finished) {
