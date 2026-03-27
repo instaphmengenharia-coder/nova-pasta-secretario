@@ -1,20 +1,12 @@
 import { useState, useCallback } from 'react'
 
-const CLAUDE_API = 'https://api.anthropic.com/v1/messages'
+const CLAUDE_API = 'https://agente-servidor-production.up.railway.app/claude/proxy'
 const MODEL = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-20250514'
 
 async function callClaude(prompt) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error('VITE_ANTHROPIC_API_KEY não configurada no .env')
-
   const res = await fetch(CLAUDE_API, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 2048,

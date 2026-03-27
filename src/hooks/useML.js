@@ -11,16 +11,9 @@ const MAX_HISTORY   = 200
 // ─── Claude Haiku helper ──────────────────────────────────────────────────────
 
 async function callHaiku(messages, maxTokens = 200) {
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error('VITE_ANTHROPIC_API_KEY não configurada')
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('https://agente-servidor-production.up.railway.app/claude/proxy', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: HAIKU_MODEL, max_tokens: maxTokens, messages }),
   })
   if (!res.ok) {
