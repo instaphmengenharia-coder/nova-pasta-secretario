@@ -340,8 +340,8 @@ async function callClaude(_apiKey, messages, systemPrompt, retry = 0) {
     const body = await res.json().catch(() => ({}))
     const msg = body?.error?.message || `Erro HTTP ${res.status}`
     // Erro fatal não recuperável → enriquece mensagem para o usuário
-    if (res.status === 401) throw new Error('API key inválida ou expirada — verifique VITE_ANTHROPIC_API_KEY')
-    if (res.status === 403) throw new Error('Sem permissão — verifique a API key')
+    if (res.status === 401) throw new Error('API key inválida ou expirada — verifique ANTHROPIC_API_KEY no Railway')
+    if (res.status === 403) throw new Error('Sem permissão — verifique ANTHROPIC_API_KEY no Railway')
     if (res.status === 529) throw new Error('API da Anthropic sobrecarregada — tente novamente em alguns minutos')
     throw new Error(msg)
   }
@@ -416,9 +416,6 @@ export function useBrowserAgent() {
   }, [])
 
   const runAgent = useCallback(async (task, opts = {}, viabilidade = null) => {
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-    if (!apiKey) { addLog('error', 'VITE_ANTHROPIC_API_KEY não configurada'); return }
-
     setRunning(true)
     setPaused(false)
     setLog([])
@@ -492,7 +489,7 @@ export function useBrowserAgent() {
         addLog('thinking', 'Pensando...')
         let aiText
         try {
-          aiText = await callClaude(apiKey, messages, systemPrompt)
+          aiText = await callClaude(null, messages, systemPrompt)
         } catch (apiErr) {
           // Erro de API não derruba o agente — pausa e explica
           addLog('error', `⚠️ Erro na API: ${apiErr.message}`)
