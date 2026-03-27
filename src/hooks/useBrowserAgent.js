@@ -305,50 +305,53 @@ async function summarizeOldMessages(_apiKey, messages) {
 
 async function callClaude(_apiKey, messages, systemPrompt, retry = 0) {
   await acquireLock()
-  // Comprime histórico quando fica longo (>10 mensagens)
-  let trimmed = messages
-  if (messages.length > 10) {
+  try {
+    // Comprime histórico quando fica longo (>10 mensagens)
+    let trimmed = messages
+    if (messages.length > 10) {
+      releaseLock()
+      trimmed = await summarizeOldMessages(null, messages)
+      await acquireLock()
+    } else if (messages.length > 5) {
+      trimmed = messages.slice(-5)
+    }
+    const lastUser = [...trimmed].reverse().find(m => m.role === 'user')
+    const model = chooseModel(lastUser?.content)
+    // Proxy Railway — API key nunca vai ao browser
+    const res = await fetch(CLAUDE_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: 512, system: systemPrompt, messages: trimmed }),
+    })
+    // Rate limit → aguarda e tenta de novo (até 3x, intervalo crescente)
+    if (res.status === 429 && retry < 3) {
+      releaseLock()
+      const wait = (retry + 1) * 20000 // 20s, 40s, 60s
+      await new Promise(r => setTimeout(r, wait))
+      return callClaude(null, messages, systemPrompt, retry + 1)
+    }
+    // Erro de servidor temporário → 1 retry
+    if ((res.status === 500 || res.status === 529) && retry < 2) {
+      releaseLock()
+      await new Promise(r => setTimeout(r, 10000))
+      return callClaude(null, messages, systemPrompt, retry + 1)
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      const msg = body?.error?.message || `Erro HTTP ${res.status}`
+      if (res.status === 401) throw new Error('API key inválida ou expirada — verifique ANTHROPIC_API_KEY no Railway')
+      if (res.status === 403) throw new Error('Sem permissão — verifique ANTHROPIC_API_KEY no Railway')
+      if (res.status === 529) throw new Error('API da Anthropic sobrecarregada — tente novamente em alguns minutos')
+      throw new Error(msg)
+    }
+    const data = await res.json()
     releaseLock()
-    trimmed = await summarizeOldMessages(null, messages)
-    await acquireLock()
-  } else if (messages.length > 5) {
-    trimmed = messages.slice(-5)
-  }
-  const lastUser = [...trimmed].reverse().find(m => m.role === 'user')
-  const model = chooseModel(lastUser?.content)
-  // Proxy Railway — API key nunca vai ao browser
-  const res = await fetch(CLAUDE_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, max_tokens: 512, system: systemPrompt, messages: trimmed }),
-  })
-  // Rate limit → aguarda e tenta de novo (até 3x, intervalo crescente)
-  if (res.status === 429 && retry < 3) {
+    await new Promise(r => setTimeout(r, 1500)) // 1.5s entre chamadas
+    return data.content[0].text
+  } catch (err) {
     releaseLock()
-    const wait = (retry + 1) * 20000 // 20s, 40s, 60s
-    await new Promise(r => setTimeout(r, wait))
-    return callClaude(null, messages, systemPrompt, retry + 1)
+    throw err
   }
-  // Erro de servidor temporário → 1 retry
-  if ((res.status === 500 || res.status === 529) && retry < 2) {
-    releaseLock()
-    await new Promise(r => setTimeout(r, 10000))
-    return callClaude(null, messages, systemPrompt, retry + 1)
-  }
-  if (!res.ok) {
-    releaseLock()
-    const body = await res.json().catch(() => ({}))
-    const msg = body?.error?.message || `Erro HTTP ${res.status}`
-    // Erro fatal não recuperável → enriquece mensagem para o usuário
-    if (res.status === 401) throw new Error('API key inválida ou expirada — verifique ANTHROPIC_API_KEY no Railway')
-    if (res.status === 403) throw new Error('Sem permissão — verifique ANTHROPIC_API_KEY no Railway')
-    if (res.status === 529) throw new Error('API da Anthropic sobrecarregada — tente novamente em alguns minutos')
-    throw new Error(msg)
-  }
-  const data = await res.json()
-  releaseLock()
-  await new Promise(r => setTimeout(r, 1500)) // 1.5s entre chamadas
-  return data.content[0].text
 }
 
 function parseAction(text) {
@@ -511,18 +514,21 @@ export function useBrowserAgent() {
         const action = parseAction(aiText)
 
         // ── Detecção de loop: mesma ação repetida N vezes seguidas ───────────
+        // wait não conta como ação para detecção de loop mas também não reseta o contador
         const actionKey = `${action.action}|${action.url || ''}|${action.selector || ''}|${action.code || ''}`
-        if (actionKey === lastActionKey && action.action !== 'wait') {
-          repeatCount++
-          if (repeatCount >= LOOP_LIMIT) {
-            addLog('error', `⛔ Agente preso em loop: "${action.action}" repetiu ${LOOP_LIMIT}x seguidas — cancelando.`)
-            agentStatus = 'failed'
-            finished = true
-            break
+        if (action.action !== 'wait') {
+          if (actionKey === lastActionKey) {
+            repeatCount++
+            if (repeatCount >= LOOP_LIMIT) {
+              addLog('error', `⛔ Agente preso em loop: "${action.action}" repetiu ${LOOP_LIMIT}x seguidas — cancelando.`)
+              agentStatus = 'failed'
+              finished = true
+              break
+            }
+          } else {
+            lastActionKey = actionKey
+            repeatCount = 0
           }
-        } else {
-          lastActionKey = actionKey
-          repeatCount = 0
         }
 
         if (action.action === 'done') {
