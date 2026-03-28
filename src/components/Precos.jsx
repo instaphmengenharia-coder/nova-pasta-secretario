@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { assinarPlano } from '../hooks/usePlano'
+import { assinarPlano, cancelarAssinatura, buscarEntregas } from '../hooks/usePlano'
 
 const FONT = "'Google Sans', 'Roboto', sans-serif"
 
@@ -51,16 +51,36 @@ const PLANOS = [
       'Modo automático (faz tudo sozinho)',
       'WhatsApp com resumo diário',
       'Análise de viabilidade avançada',
-      'Múltiplas contas Google',
       'Acesso antecipado a novidades',
     ],
     btn: 'Assinar Premium',
   },
 ]
 
-export default function Precos({ user, planoAtual = 'free', onVoltar }) {
+export default function Precos({ user, planoAtual = 'free', verificandoPagamento = false, onVoltar }) {
   const [loading, setLoading] = useState(null)
   const [erro, setErro] = useState('')
+  const [cancelando, setCancelando] = useState(false)
+  const [cancelado, setCancelado] = useState(false)
+  const [entregas, setEntregas] = useState([])
+
+  useEffect(() => {
+    if (user?.id) buscarEntregas(user.id).then(setEntregas).catch(() => {})
+  }, [user?.id])
+
+  async function handleCancelar() {
+    if (!window.confirm('Cancelar sua assinatura? Você perderá o acesso ao final do período pago.')) return
+    setCancelando(true)
+    setErro('')
+    try {
+      await cancelarAssinatura(user?.id)
+      setCancelado(true)
+    } catch (err) {
+      setErro(err.message)
+    } finally {
+      setCancelando(false)
+    }
+  }
 
   async function handleAssinar(planoId) {
     if (planoId === 'free') return
@@ -94,6 +114,19 @@ export default function Precos({ user, planoAtual = 'free', onVoltar }) {
           Cancele quando quiser · Cobrado via Mercado Pago
         </div>
       </div>
+
+      {verificandoPagamento && (
+        <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, color: '#2e7d32' }}>
+          <span style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #2e7d32', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          Verificando seu pagamento… isso pode levar alguns segundos.
+        </div>
+      )}
+
+      {cancelado && (
+        <div style={{ background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#e65100' }}>
+          Assinatura cancelada. Seu acesso continua até o fim do período já pago.
+        </div>
+      )}
 
       {erro && (
         <div style={{ background: '#fce8e6', color: '#c62828', padding: '10px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
@@ -166,13 +199,48 @@ export default function Precos({ user, planoAtual = 'free', onVoltar }) {
               >
                 {isLoading ? 'Redirecionando...' : isAtual ? '✓ Plano atual' : p.btn}
               </button>
+              {isAtual && p.id !== 'free' && !cancelado && (
+                <button
+                  onClick={handleCancelar}
+                  disabled={cancelando}
+                  style={{ width: '100%', marginTop: 8, padding: '6px 0', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: '1px solid #ffcdd2', background: 'transparent', color: '#c62828', fontFamily: FONT, opacity: cancelando ? 0.6 : 1 }}
+                >
+                  {cancelando ? 'Cancelando...' : 'Cancelar assinatura'}
+                </button>
+              )}
             </motion.div>
           )
         })}
       </div>
 
       <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--se-t4)' }}>
-        Pagamento seguro via Mercado Pago · Cancele pelo email a qualquer momento
+        Pagamento seguro via Mercado Pago · Cancele quando quiser pelo app
+      </div>
+
+      {/* Histórico de entregas */}
+      <div style={{ marginTop: 32 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--se-t1)', marginBottom: 12 }}>
+          Histórico de entregas
+        </div>
+        {entregas.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--se-t4)', textAlign: 'center', padding: '16px 0' }}>
+            Nenhuma entrega registrada ainda.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {entregas.map((e, i) => (
+              <div key={i} style={{ background: 'var(--se-surface)', border: '1px solid var(--se-border)', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--se-t1)' }}>✅ {e.titulo}</div>
+                  {e.disciplina && <div style={{ fontSize: 11, color: 'var(--se-t3)', marginTop: 2 }}>{e.disciplina}</div>}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--se-t4)', whiteSpace: 'nowrap' }}>
+                  {new Date(e.entregue_em).toLocaleDateString('pt-BR')}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </motion.div>
   )

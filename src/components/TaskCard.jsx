@@ -921,7 +921,17 @@ Responda APENAS com JSON válido:
                 </div>
               )}
               {solveError && !solveLoading && (
-                <div style={styles.errorBox}><strong>Erro:</strong> {solveError}</div>
+                /gratuitas|upgrade/i.test(solveError) ? (
+                  <div style={{ background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 8, padding: '12px 16px', fontSize: 13 }}>
+                    <strong style={{ color: '#e65100' }}>Limite atingido</strong>
+                    <p style={{ margin: '6px 0 10px', color: 'var(--se-t2)' }}>Você usou suas 2 atividades gratuitas este mês. Assine o Pro para continuar sem limites.</p>
+                    <button onClick={() => window.dispatchEvent(new CustomEvent('se:upgrade-needed'))} style={{ background: '#e65100', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                      Ver planos
+                    </button>
+                  </div>
+                ) : (
+                  <div style={styles.errorBox}><strong>Erro:</strong> {solveError}</div>
+                )
               )}
               {solution && !solveLoading && (
                 <motion.div
@@ -1062,7 +1072,17 @@ Responda APENAS com JSON válido:
                 </div>
               )}
               {aiError && !loading && (
-                <div style={styles.errorBox}><strong>Erro:</strong> {aiError}</div>
+                /gratuitas|upgrade/i.test(aiError) ? (
+                  <div style={{ background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 8, padding: '12px 16px', fontSize: 13 }}>
+                    <strong style={{ color: '#e65100' }}>Limite atingido</strong>
+                    <p style={{ margin: '6px 0 10px', color: 'var(--se-t2)' }}>Você usou suas 2 atividades gratuitas este mês. Assine o Pro para continuar sem limites.</p>
+                    <button onClick={() => window.dispatchEvent(new CustomEvent('se:upgrade-needed'))} style={{ background: '#e65100', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+                      Ver planos
+                    </button>
+                  </div>
+                ) : (
+                  <div style={styles.errorBox}><strong>Erro:</strong> {aiError}</div>
+                )
               )}
               {analysis && !loading && (
                 <div style={styles.analysisText}><MarkdownLike text={analysis} /></div>

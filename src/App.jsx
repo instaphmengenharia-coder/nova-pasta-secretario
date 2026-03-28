@@ -90,6 +90,7 @@ export default function App() {
   const [extConnected, setExtConnected] = useState(false)
   const [showExtModal, setShowExtModal] = useState(false)
   const [planoInfo, setPlanoInfo] = useState({ plano: 'free', atividades_mes: 0, validade_ate: null })
+  const [verificandoPagamento, setVerificandoPagamento] = useState(false)
 
   const [solutions, setSolutions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('se_solutions') || '{}') } catch { return {} }
@@ -154,8 +155,11 @@ export default function App() {
     window.history.replaceState({}, '', window.location.pathname)
     if (status === 'approved' && user?.id) {
       setTab('PRECOS')
+      setVerificandoPagamento(true)
       setTimeout(() => {
-        buscarPlanoUsuario(user.id).then(setPlanoInfo).catch(() => {})
+        buscarPlanoUsuario(user.id)
+          .then(data => { setPlanoInfo(data); setVerificandoPagamento(false) })
+          .catch(() => setVerificandoPagamento(false))
       }, 4000)
     }
   }, [user?.id])
@@ -1014,7 +1018,7 @@ export default function App() {
         )}
         {/* Precos tab */}
         {tab === 'PRECOS' && (
-          <Precos user={user} planoAtual={planoInfo.plano} onVoltar={() => setTab('ASSIGNED')} />
+          <Precos user={user} planoAtual={planoInfo.plano} verificandoPagamento={verificandoPagamento} onVoltar={() => setTab('ASSIGNED')} />
         )}
         </AnimatePresence>
 
