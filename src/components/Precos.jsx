@@ -24,7 +24,7 @@ const PLANOS = [
   {
     id: 'pro',
     nome: 'Pro',
-    preco: 'R$ 39,90',
+    preco: 'R$ 29,90',
     periodo: '/mês',
     cor: '#1a73e8',
     destaque: true,
@@ -42,7 +42,7 @@ const PLANOS = [
   {
     id: 'premium',
     nome: 'Premium',
-    preco: 'R$ 59,90',
+    preco: 'R$ 39,90',
     periodo: '/mês',
     cor: '#9c27b0',
     descricao: 'Para máxima eficiência',
