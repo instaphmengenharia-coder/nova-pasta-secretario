@@ -30,7 +30,7 @@ const PLANOS = [
     destaque: true,
     descricao: 'Para estudantes sérios',
     recursos: [
-      'Atividades ilimitadas',
+      '30 atividades por mês',
       'Agente no Chrome (automação total)',
       'Notificações WhatsApp',
       'Dashboard de histórico e notas',
@@ -48,6 +48,7 @@ const PLANOS = [
     descricao: 'Para máxima eficiência',
     recursos: [
       'Tudo do Pro',
+      '80 atividades por mês',
       'Modo automático (faz tudo sozinho)',
       'WhatsApp com resumo diário',
       'Análise de viabilidade avançada',

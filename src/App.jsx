@@ -536,14 +536,17 @@ export default function App() {
                 {2 - (planoInfo.atividades_mes || 0) <= 0 ? '0/2 — Fazer upgrade' : `${2 - (planoInfo.atividades_mes || 0)}/2 restantes`}
               </button>
             ) : (
-              <div style={{
+              <button onClick={() => setTab('PRECOS')} style={{
                 background: planoInfo.plano === 'premium' ? '#f3e5f5' : '#e8f0fe',
                 border: `1px solid ${planoInfo.plano === 'premium' ? '#ce93d8' : '#90caf9'}`,
                 borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 700,
                 color: planoInfo.plano === 'premium' ? '#7b1fa2' : '#1565c0',
+                cursor: 'pointer', fontFamily: FONT,
               }}>
-                {planoInfo.plano === 'premium' ? '💎 Premium' : '⭐ Pro'}
-              </div>
+                {planoInfo.plano === 'premium'
+                  ? `💎 ${planoInfo.atividades_mes || 0}/80`
+                  : `⭐ ${planoInfo.atividades_mes || 0}/30`}
+              </button>
             )}
             {user && (
               <div style={s.userInfo}>
