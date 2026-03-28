@@ -158,7 +158,7 @@ Seja realista, prático e motivador. Máximo 280 palavras.`
   }, [])
 
   // Resolve with full context: reads attached Docs/PDFs via agente-servidor
-  const solveTaskWithContext = useCallback(async (task, accessToken, styleExamples = []) => {
+  const solveTaskWithContext = useCallback(async (task, accessToken, styleExamples = [], userId) => {
     const SERVER = import.meta.env.VITE_AGENT_SERVER || 'https://agente-servidor-production.up.railway.app'
     const res = await fetch(`${SERVER}/atividade/resolver-url`, {
       method: 'POST',
@@ -172,6 +172,7 @@ Seja realista, prático e motivador. Máximo 280 palavras.`
         taskDescription: task.description,
         aluno: { nome: 'Aluno', serie: '' },
         estiloExemplos: styleExamples,
+        userId,
       }),
     })
     if (!res.ok) {

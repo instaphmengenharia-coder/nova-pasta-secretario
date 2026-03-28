@@ -141,10 +141,14 @@ export default function App() {
     }
   }, [autoDone])
 
-  // ── Plano do usuário ───────────────────────────────────────────────────────
+  // ── Plano do usuário — busca inicial + refresh a cada 5 min ───────────────
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return
     buscarPlanoUsuario(user.id).then(setPlanoInfo).catch(() => {})
+    const iv = setInterval(() => {
+      buscarPlanoUsuario(user.id).then(setPlanoInfo).catch(() => {})
+    }, 5 * 60 * 1000)
+    return () => clearInterval(iv)
   }, [isAuthenticated, user?.id])
 
   // ── Detecta retorno do Mercado Pago e atualiza plano ───────────────────────

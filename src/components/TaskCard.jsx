@@ -273,7 +273,7 @@ Responda APENAS com JSON válido:
     setSolveError(null)
     setContextMateriais([])
     try {
-      const { text, materiais } = await solveTaskWithContext(task, accessToken, styleExamples)
+      const { text, materiais } = await solveTaskWithContext(task, accessToken, styleExamples, userId)
       setSolution(text)
       setEditedSolution(text)
       setContextMateriais(materiais)
@@ -975,9 +975,19 @@ Responda APENAS com JSON válido:
                         {delivered ? '✓ Entregue no Classroom!' : delivering ? '⏳ Entregando…' : '🚀 Enviar atividade'}
                       </button>
                       {deliverError && (
-                        <div style={{ ...styles.errorBox, marginTop: 6, fontSize: 12 }}>
-                          {deliverError}
-                        </div>
+                        /gratuitas|upgrade/i.test(deliverError) ? (
+                          <div style={{ background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 8, padding: '10px 14px', marginTop: 6, fontSize: 12 }}>
+                            <strong style={{ color: '#e65100' }}>Limite atingido</strong>
+                            <p style={{ margin: '4px 0 8px', color: 'var(--se-t2)' }}>Você usou suas 2 atividades gratuitas este mês. Assine o Pro para continuar.</p>
+                            <button onClick={() => window.dispatchEvent(new CustomEvent('se:upgrade-needed'))} style={{ background: '#e65100', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>
+                              Ver planos
+                            </button>
+                          </div>
+                        ) : (
+                          <div style={{ ...styles.errorBox, marginTop: 6, fontSize: 12 }}>
+                            {deliverError}
+                          </div>
+                        )
                       )}
                     </>
                   )}
