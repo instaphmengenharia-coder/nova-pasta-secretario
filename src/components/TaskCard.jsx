@@ -217,6 +217,9 @@ Responda APENAS com JSON válido:
           resposta: text,
           tipoResposta: task.workType,
           accessToken,
+          userId,
+          tituloAtividade: task.title,
+          disciplina: task.courseName,
         }),
       })
       const data = await res.json()
