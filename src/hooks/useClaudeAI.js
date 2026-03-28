@@ -176,6 +176,7 @@ Seja realista, prático e motivador. Máximo 280 palavras.`
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
+      if (err.upgrade) window.dispatchEvent(new CustomEvent('se:upgrade-needed'))
       throw new Error(err.erro || `Erro ${res.status}`)
     }
     const data = await res.json()

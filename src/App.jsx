@@ -146,6 +146,27 @@ export default function App() {
     buscarPlanoUsuario(user.id).then(setPlanoInfo).catch(() => {})
   }, [isAuthenticated, user?.id])
 
+  // ── Detecta retorno do Mercado Pago e atualiza plano ───────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const status = params.get('collection_status') || params.get('status')
+    if (!status) return
+    window.history.replaceState({}, '', window.location.pathname)
+    if (status === 'approved' && user?.id) {
+      setTab('PRECOS')
+      setTimeout(() => {
+        buscarPlanoUsuario(user.id).then(setPlanoInfo).catch(() => {})
+      }, 4000)
+    }
+  }, [user?.id])
+
+  // ── Redireciona para Planos quando limite free é atingido ──────────────────
+  useEffect(() => {
+    const handler = () => setTab('PRECOS')
+    window.addEventListener('se:upgrade-needed', handler)
+    return () => window.removeEventListener('se:upgrade-needed', handler)
+  }, [])
+
   // ── Dark mode ──────────────────────────────────────────────────────────────
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)

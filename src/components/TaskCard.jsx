@@ -220,6 +220,7 @@ Responda APENAS com JSON válido:
         }),
       })
       const data = await res.json()
+      if (data.upgrade) window.dispatchEvent(new CustomEvent('se:upgrade-needed'))
       if (!res.ok || data.erro) throw new Error(data.erro || data.message || 'Erro ao entregar')
       setDelivered(true)
     } catch (err) {
