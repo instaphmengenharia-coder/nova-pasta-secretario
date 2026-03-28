@@ -245,6 +245,8 @@ Responda APENAS com JSON válido:
     : STATUS_CONFIG[task.status] || STATUS_CONFIG.NEW
 
   const [contextMateriais, setContextMateriais] = useState([])
+  const [aiInsights, setAiInsights] = useState(null) // { raciocinio, pontos, confianca }
+  const [showInsights, setShowInsights] = useState(false)
 
   const handleSolveClick = async (e) => {
     e.stopPropagation()
@@ -273,10 +275,11 @@ Responda APENAS com JSON válido:
     setSolveError(null)
     setContextMateriais([])
     try {
-      const { text, materiais } = await solveTaskWithContext(task, accessToken, styleExamples, userId)
+      const { text, raciocinio, pontos, confianca, materiais } = await solveTaskWithContext(task, accessToken, styleExamples, userId)
       setSolution(text)
       setEditedSolution(text)
       setContextMateriais(materiais)
+      if (raciocinio || pontos?.length) setAiInsights({ raciocinio, pontos, confianca })
       onSolutionSaved?.(text)
     } catch (err) {
       setSolveError(err.message)
@@ -960,6 +963,43 @@ Responda APENAS com JSON válido:
                   <button style={styles.copyBtn} onClick={handleCopy}>
                     {copied ? '✓ Copiado!' : '⎘ Copiar resposta'}
                   </button>
+
+                  {/* Raciocínio e pontos de atenção */}
+                  {aiInsights && (
+                    <div style={{ marginTop: 10 }}>
+                      <button
+                        onClick={() => setShowInsights(!showInsights)}
+                        style={{ background: 'none', border: '1px solid var(--se-border)', borderRadius: 8, padding: '6px 12px', fontSize: 12, color: 'var(--se-t3)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontFamily: FONT }}
+                      >
+                        {showInsights ? '▾' : '▸'} Ver raciocínio da IA
+                        {aiInsights.confianca && (
+                          <span style={{ marginLeft: 4, padding: '1px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: aiInsights.confianca === 'alta' ? '#e6f4ea' : aiInsights.confianca === 'media' ? '#fff3e0' : '#fce8e6', color: aiInsights.confianca === 'alta' ? '#2e7d32' : aiInsights.confianca === 'media' ? '#e65100' : '#c62828' }}>
+                            {aiInsights.confianca === 'alta' ? 'Alta confiança' : aiInsights.confianca === 'media' ? 'Média confiança' : 'Baixa confiança'}
+                          </span>
+                        )}
+                      </button>
+                      {showInsights && (
+                        <div style={{ marginTop: 8, background: 'var(--se-input)', borderRadius: 8, padding: '12px 14px', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {aiInsights.raciocinio && (
+                            <div>
+                              <div style={{ fontWeight: 700, color: 'var(--se-t2)', marginBottom: 4, fontSize: 12 }}>💡 Como a IA chegou nessa resposta</div>
+                              <div style={{ color: 'var(--se-t2)', lineHeight: 1.5 }}>{aiInsights.raciocinio}</div>
+                            </div>
+                          )}
+                          {aiInsights.pontos?.length > 0 && (
+                            <div>
+                              <div style={{ fontWeight: 700, color: 'var(--se-t2)', marginBottom: 4, fontSize: 12 }}>⚠️ O que revisar antes de entregar</div>
+                              <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                {aiInsights.pontos.map((p, i) => (
+                                  <li key={i} style={{ color: 'var(--se-t2)', lineHeight: 1.5 }}>{p}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {accessToken && task.status !== 'TURNED_IN' && (
                     <>

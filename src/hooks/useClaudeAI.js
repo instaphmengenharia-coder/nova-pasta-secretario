@@ -181,7 +181,13 @@ Seja realista, prático e motivador. Máximo 280 palavras.`
       throw new Error(err.erro || `Erro ${res.status}`)
     }
     const data = await res.json()
-    return { text: data.rascunho, materiais: data.materiais || [] }
+    return {
+      text: data.rascunho,
+      raciocinio: data.raciocinio || null,
+      pontos: data.pontos_de_atencao || [],
+      confianca: data.confianca || null,
+      materiais: data.materiais || [],
+    }
   }, [])
 
   const solveTask = useCallback(async (task, styleExamples = []) => {
