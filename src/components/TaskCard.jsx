@@ -278,11 +278,11 @@ Responda APENAS com JSON válido:
     setSolveError(null)
     setContextMateriais([])
     try {
-      const { text, raciocinio, pontos, confianca, materiais } = await solveTaskWithContext(task, accessToken, styleExamples, userId)
+      const { text, raciocinio, pontos, confianca, materiais, custo_usd, tokens } = await solveTaskWithContext(task, accessToken, styleExamples, userId)
       setSolution(text)
       setEditedSolution(text)
       setContextMateriais(materiais)
-      if (raciocinio || pontos?.length) setAiInsights({ raciocinio, pontos, confianca })
+      if (raciocinio || pontos?.length || custo_usd != null) setAiInsights({ raciocinio, pontos, confianca, custo_usd, tokens })
       onSolutionSaved?.(text)
     } catch (err) {
       setSolveError(err.message)
@@ -997,6 +997,19 @@ Responda APENAS com JSON válido:
                                   <li key={i} style={{ color: 'var(--se-t2)', lineHeight: 1.5 }}>{p}</li>
                                 ))}
                               </ul>
+                            </div>
+                          )}
+                          {aiInsights.custo_usd != null && (
+                            <div style={{ borderTop: '1px solid var(--se-border)', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 11, color: 'var(--se-t3)' }}>
+                                💰 Custo desta atividade:
+                                <strong style={{ marginLeft: 4, color: 'var(--se-t2)' }}>
+                                  US$ {aiInsights.custo_usd.toFixed(4)}
+                                </strong>
+                                <span style={{ marginLeft: 6, color: 'var(--se-t3)' }}>
+                                  ({aiInsights.tokens?.input ?? '?'} entrada + {aiInsights.tokens?.output ?? '?'} saída tokens)
+                                </span>
+                              </span>
                             </div>
                           )}
                         </div>
