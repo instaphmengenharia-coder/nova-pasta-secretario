@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { assinarPlano, cancelarAssinatura, buscarEntregas } from '../hooks/usePlano'
+import { motion, AnimatePresence } from 'framer-motion'
+import { cancelarAssinatura, buscarEntregas } from '../hooks/usePlano'
+import PagamentoForm from './PagamentoForm'
 
 const FONT = "'Google Sans', 'Roboto', sans-serif"
 
@@ -64,6 +65,8 @@ export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, 
   const [cancelando, setCancelando] = useState(false)
   const [cancelado, setCancelado] = useState(false)
   const [entregas, setEntregas] = useState([])
+  const [planoSelecionado, setPlanoSelecionado] = useState(null) // abre form de pagamento
+  const [sucesso, setSucesso] = useState(null)
 
   useEffect(() => {
     if (user?.id && accessToken) buscarEntregas(user.id, accessToken).then(setEntregas).catch(() => {})
@@ -83,21 +86,15 @@ export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, 
     }
   }
 
-  async function handleAssinar(planoId) {
+  function handleAssinar(planoId) {
     if (planoId === 'free') return
-    setLoading(planoId)
     setErro('')
-    try {
-      const { checkoutUrl } = await assinarPlano({
-        userId: user?.id,
-        plano: planoId,
-        email: user?.email,
-      })
-      window.location.href = checkoutUrl
-    } catch (err) {
-      setErro(err.message)
-      setLoading(null)
-    }
+    setPlanoSelecionado(planoId)
+  }
+
+  function handlePagamentoSucesso(data) {
+    setPlanoSelecionado(null)
+    setSucesso(data.status === 'authorized' ? 'Assinatura ativada! Aproveite seu plano.' : 'Assinatura criada! Aguardando confirmação do pagamento.')
   }
 
   return (
@@ -107,6 +104,31 @@ export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, 
       exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
       style={{ padding: '8px 0', fontFamily: FONT }}
     >
+      {/* Form de pagamento embutido */}
+      <AnimatePresence>
+        {planoSelecionado && (
+          <motion.div
+            key="pagamento"
+            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
+            style={{ background: 'var(--se-card)', border: '1px solid var(--se-border)', borderRadius: 14, padding: 20, marginBottom: 20 }}
+          >
+            <PagamentoForm
+              plano={planoSelecionado}
+              user={user}
+              onSuccess={handlePagamentoSucesso}
+              onCancel={() => setPlanoSelecionado(null)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {sucesso && (
+        <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#2e7d32', fontWeight: 600 }}>
+          ✅ {sucesso}
+        </div>
+      )}
+
       <div style={{ textAlign: 'center', marginBottom: 28 }}>
         <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--se-t1)', marginBottom: 6 }}>
           Escolha seu plano
