@@ -7,7 +7,7 @@ import { useAutoAgent } from './hooks/useAutoAgent'
 import TaskCard from './components/TaskCard'
 import Dashboard from './components/Dashboard'
 import Precos from './components/Precos'
-import { buscarPlanoUsuario } from './hooks/usePlano'
+import { buscarPlanoUsuario, verificarPagamentoMP } from './hooks/usePlano'
 
 const COURSE_COLORS = [
   '#1a73e8','#e91e63','#9c27b0','#ff5722',
@@ -160,11 +160,20 @@ export default function App() {
     if (status === 'approved' && user?.id) {
       setTab('PRECOS')
       setVerificandoPagamento(true)
-      setTimeout(() => {
-        buscarPlanoUsuario(user.id)
-          .then(data => { setPlanoInfo(data); setVerificandoPagamento(false) })
-          .catch(() => setVerificandoPagamento(false))
-      }, 4000)
+      // Consulta MP diretamente para ativar plano sem depender do webhook
+      verificarPagamentoMP(user.id)
+        .then(resultado => {
+          if (resultado?.ativado) {
+            setPlanoInfo(resultado)
+          } else {
+            // fallback: busca supabase após 4s
+            return new Promise(r => setTimeout(r, 4000))
+              .then(() => buscarPlanoUsuario(user.id))
+              .then(setPlanoInfo)
+          }
+        })
+        .catch(() => {})
+        .finally(() => setVerificandoPagamento(false))
     }
   }, [user?.id])
 
@@ -1025,7 +1034,7 @@ export default function App() {
         )}
         {/* Precos tab */}
         {tab === 'PRECOS' && (
-          <Precos user={user} planoAtual={planoInfo.plano} verificandoPagamento={verificandoPagamento} onVoltar={() => setTab('ASSIGNED')} />
+          <Precos user={user} planoAtual={planoInfo.plano} custoAcumulado={planoInfo.custo_acumulado_usd || 0} verificandoPagamento={verificandoPagamento} accessToken={accessToken} onVoltar={() => setTab('ASSIGNED')} />
         )}
         </AnimatePresence>
 

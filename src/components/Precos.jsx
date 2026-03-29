@@ -58,7 +58,7 @@ const PLANOS = [
   },
 ]
 
-export default function Precos({ user, planoAtual = 'free', verificandoPagamento = false, onVoltar }) {
+export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, verificandoPagamento = false, accessToken = null, onVoltar }) {
   const [loading, setLoading] = useState(null)
   const [erro, setErro] = useState('')
   const [cancelando, setCancelando] = useState(false)
@@ -66,15 +66,15 @@ export default function Precos({ user, planoAtual = 'free', verificandoPagamento
   const [entregas, setEntregas] = useState([])
 
   useEffect(() => {
-    if (user?.id) buscarEntregas(user.id).then(setEntregas).catch(() => {})
-  }, [user?.id])
+    if (user?.id && accessToken) buscarEntregas(user.id, accessToken).then(setEntregas).catch(() => {})
+  }, [user?.id, accessToken])
 
   async function handleCancelar() {
     if (!window.confirm('Cancelar sua assinatura? Você perderá o acesso ao final do período pago.')) return
     setCancelando(true)
     setErro('')
     try {
-      await cancelarAssinatura(user?.id)
+      await cancelarAssinatura(user?.id, accessToken)
       setCancelado(true)
     } catch (err) {
       setErro(err.message)
@@ -115,6 +115,13 @@ export default function Precos({ user, planoAtual = 'free', verificandoPagamento
           Cancele quando quiser · Cobrado via Mercado Pago
         </div>
       </div>
+
+      {custoAcumulado > 0 && (
+        <div style={{ background: 'var(--se-input)', border: '1px solid var(--se-border)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: 'var(--se-t3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>💰 Seu custo total de IA acumulado</span>
+          <strong style={{ color: 'var(--se-t2)' }}>US$ {custoAcumulado.toFixed(4)}</strong>
+        </div>
+      )}
 
       {verificandoPagamento && (
         <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, color: '#2e7d32' }}>
