@@ -189,6 +189,8 @@ Seja realista, prático e motivador. Máximo 280 palavras.`
       materiais: data.materiais || [],
       custo_usd: data._custo_usd ?? null,
       tokens: data._tokens ?? null,
+      materia: data._materia || null,
+      retried: data._retried || false,
     }
   }, [])
 

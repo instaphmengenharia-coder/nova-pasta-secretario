@@ -278,11 +278,11 @@ Responda APENAS com JSON válido:
     setSolveError(null)
     setContextMateriais([])
     try {
-      const { text, raciocinio, pontos, confianca, materiais, custo_usd, tokens } = await solveTaskWithContext(task, accessToken, styleExamples, userId)
+      const { text, raciocinio, pontos, confianca, materiais, custo_usd, tokens, materia, retried } = await solveTaskWithContext(task, accessToken, styleExamples, userId)
       setSolution(text)
       setEditedSolution(text)
       setContextMateriais(materiais)
-      if (raciocinio || pontos?.length || custo_usd != null) setAiInsights({ raciocinio, pontos, confianca, custo_usd, tokens })
+      if (raciocinio || pontos?.length || custo_usd != null) setAiInsights({ raciocinio, pontos, confianca, custo_usd, tokens, materia, retried })
       onSolutionSaved?.(text)
     } catch (err) {
       setSolveError(err.message)
@@ -999,17 +999,23 @@ Responda APENAS com JSON válido:
                               </ul>
                             </div>
                           )}
-                          {aiInsights.custo_usd != null && (
-                            <div style={{ borderTop: '1px solid var(--se-border)', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 11, color: 'var(--se-t3)' }}>
-                                💰 Custo desta atividade:
-                                <strong style={{ marginLeft: 4, color: 'var(--se-t2)' }}>
-                                  US$ {aiInsights.custo_usd.toFixed(4)}
-                                </strong>
-                                <span style={{ marginLeft: 6, color: 'var(--se-t3)' }}>
-                                  ({aiInsights.tokens?.input ?? '?'} entrada + {aiInsights.tokens?.output ?? '?'} saída tokens)
+                          {(aiInsights.custo_usd != null || aiInsights.materia || aiInsights.retried) && (
+                            <div style={{ borderTop: '1px solid var(--se-border)', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              {aiInsights.materia && aiInsights.materia !== 'geral' && (
+                                <span style={{ fontSize: 11, background: 'var(--se-bg)', border: '1px solid var(--se-border)', borderRadius: 20, padding: '2px 8px', color: 'var(--se-t3)' }}>
+                                  📚 {aiInsights.materia}
                                 </span>
-                              </span>
+                              )}
+                              {aiInsights.retried && (
+                                <span style={{ fontSize: 11, background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 20, padding: '2px 8px', color: '#e65100' }}>
+                                  🔄 Refeita (baixa confiança)
+                                </span>
+                              )}
+                              {aiInsights.custo_usd != null && (
+                                <span style={{ fontSize: 11, color: 'var(--se-t3)', marginLeft: 'auto' }}>
+                                  💰 <strong style={{ color: 'var(--se-t2)' }}>US$ {aiInsights.custo_usd.toFixed(4)}</strong>
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
