@@ -89,7 +89,7 @@ export default function App() {
   const [autoMode, setAutoMode] = useState(() => localStorage.getItem('se_auto') === '1')
   const [extConnected, setExtConnected] = useState(false)
   const [showExtModal, setShowExtModal] = useState(false)
-  const [planoInfo, setPlanoInfo] = useState({ plano: 'free', atividades_mes: 0, validade_ate: null, trial_usado: false, custo_acumulado_usd: 0 })
+  const [planoInfo, setPlanoInfo] = useState({ plano: 'free', validade_ate: null, credito_usado_brl: 0, credito_limite_brl: 2, trial_usado: false, custo_acumulado_usd: 0 })
   const [verificandoPagamento, setVerificandoPagamento] = useState(false)
 
   const [solutions, setSolutions] = useState(() => {
@@ -536,27 +536,26 @@ export default function App() {
               {autoMode ? '🤖 AUTO ON' : '🤖 AUTO'}
             </button>
             {/* Indicador de plano */}
-            {planoInfo.plano === 'free' ? (
-              <button onClick={() => setTab('PRECOS')} style={{
-                background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 20,
-                padding: '4px 12px', fontSize: 11, fontWeight: 700, color: '#e65100',
-                cursor: 'pointer', fontFamily: FONT,
-              }}>
-                {2 - (planoInfo.atividades_mes || 0) <= 0 ? '0/2 — Fazer upgrade' : `${2 - (planoInfo.atividades_mes || 0)}/2 restantes`}
-              </button>
-            ) : (
-              <button onClick={() => setTab('PRECOS')} style={{
-                background: planoInfo.plano === 'premium' ? '#f3e5f5' : '#e8f0fe',
-                border: `1px solid ${planoInfo.plano === 'premium' ? '#ce93d8' : '#90caf9'}`,
-                borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 700,
-                color: planoInfo.plano === 'premium' ? '#7b1fa2' : '#1565c0',
-                cursor: 'pointer', fontFamily: FONT,
-              }}>
-                {planoInfo.plano === 'premium'
-                  ? `💎 ${planoInfo.atividades_mes || 0}/80`
-                  : `⭐ ${planoInfo.atividades_mes || 0}/30`}
-              </button>
-            )}
+            {(() => {
+              const usado = planoInfo.credito_usado_brl || 0
+              const limite = planoInfo.credito_limite_brl || 2
+              const pct = Math.min(100, Math.round((usado / limite) * 100))
+              const esgotado = usado >= limite
+              const cor = planoInfo.plano === 'premium' ? '#9c27b0' : planoInfo.plano === 'pro' ? '#1a73e8' : '#e65100'
+              return (
+                <button onClick={() => setTab('PRECOS')} style={{
+                  background: 'var(--se-input)', border: `1px solid ${esgotado ? '#ffb74d' : 'var(--se-border)'}`,
+                  borderRadius: 20, padding: '4px 10px', fontSize: 11, fontWeight: 700,
+                  color: esgotado ? '#e65100' : 'var(--se-t2)', cursor: 'pointer', fontFamily: FONT,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span style={{ width: 40, height: 4, borderRadius: 4, background: 'var(--se-border)', overflow: 'hidden', display: 'inline-block' }}>
+                    <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: esgotado ? '#e65100' : cor, borderRadius: 4 }} />
+                  </span>
+                  {esgotado ? 'Crédito esgotado' : `R$${usado.toFixed(2)}/${limite.toFixed(0)}`}
+                </button>
+              )
+            })()}
             {user && (
               <div style={s.userInfo}>
                 {user.photo
@@ -1034,7 +1033,7 @@ export default function App() {
         )}
         {/* Precos tab */}
         {tab === 'PRECOS' && (
-          <Precos user={user} planoAtual={planoInfo.plano} custoAcumulado={planoInfo.custo_acumulado_usd || 0} trialUsado={planoInfo.trial_usado || false} verificandoPagamento={verificandoPagamento} accessToken={accessToken} onVoltar={() => setTab('ASSIGNED')} />
+          <Precos user={user} planoAtual={planoInfo.plano} custoAcumulado={planoInfo.custo_acumulado_usd || 0} creditoUsado={planoInfo.credito_usado_brl || 0} creditoLimite={planoInfo.credito_limite_brl || 2} trialUsado={planoInfo.trial_usado || false} verificandoPagamento={verificandoPagamento} accessToken={accessToken} onVoltar={() => setTab('ASSIGNED')} />
         )}
         </AnimatePresence>
 

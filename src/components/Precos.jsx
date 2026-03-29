@@ -58,7 +58,7 @@ const PLANOS = [
   },
 ]
 
-export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, trialUsado = false, verificandoPagamento = false, accessToken = null, onVoltar }) {
+export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, creditoUsado = 0, creditoLimite = 2, trialUsado = false, verificandoPagamento = false, accessToken = null, onVoltar }) {
   const [loading, setLoading] = useState(null)
   const [erro, setErro] = useState('')
   const [cancelando, setCancelando] = useState(false)
@@ -116,12 +116,34 @@ export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, 
         </div>
       </div>
 
-      {custoAcumulado > 0 && (
-        <div style={{ background: 'var(--se-input)', border: '1px solid var(--se-border)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: 'var(--se-t3)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>💰 Seu custo total de IA acumulado</span>
-          <strong style={{ color: 'var(--se-t2)' }}>US$ {custoAcumulado.toFixed(4)}</strong>
-        </div>
-      )}
+      {/* Barra de crédito do mês */}
+      {(() => {
+        const pct = Math.min(100, Math.round((creditoUsado / creditoLimite) * 100))
+        const esgotado = creditoUsado >= creditoLimite
+        return (
+          <div style={{ background: 'var(--se-input)', border: `1px solid ${esgotado ? '#ffb74d' : 'var(--se-border)'}`, borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
+              <span style={{ color: 'var(--se-t2)', fontWeight: 600 }}>💳 Créditos de IA usados este mês</span>
+              <span style={{ color: esgotado ? '#e65100' : 'var(--se-t2)', fontWeight: 700 }}>
+                R$ {creditoUsado.toFixed(2)} <span style={{ fontWeight: 400, color: 'var(--se-t3)' }}>de R$ {creditoLimite.toFixed(2)}</span>
+              </span>
+            </div>
+            <div style={{ width: '100%', height: 8, borderRadius: 6, background: 'var(--se-border)', overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', borderRadius: 6, background: esgotado ? '#e65100' : pct > 80 ? '#ff9800' : '#1a73e8', transition: 'width 0.4s' }} />
+            </div>
+            {esgotado && (
+              <div style={{ marginTop: 6, fontSize: 12, color: '#e65100' }}>
+                Créditos esgotados — faça upgrade para continuar usando a IA este mês.
+              </div>
+            )}
+            {custoAcumulado > 0 && (
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--se-t3)' }}>
+                Total acumulado desde sempre: US$ {custoAcumulado.toFixed(4)}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {verificandoPagamento && (
         <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, color: '#2e7d32' }}>
