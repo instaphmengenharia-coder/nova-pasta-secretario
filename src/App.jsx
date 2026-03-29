@@ -89,7 +89,7 @@ export default function App() {
   const [autoMode, setAutoMode] = useState(() => localStorage.getItem('se_auto') === '1')
   const [extConnected, setExtConnected] = useState(false)
   const [showExtModal, setShowExtModal] = useState(false)
-  const [planoInfo, setPlanoInfo] = useState({ plano: 'free', validade_ate: null, credito_usado_brl: 0, credito_limite_brl: 2, trial_usado: false, custo_acumulado_usd: 0 })
+  const [planoInfo, setPlanoInfo] = useState({ plano: 'free', validade_ate: null, creditos_usados: 0, creditos_limite: 8, trial_usado: false })
   const [verificandoPagamento, setVerificandoPagamento] = useState(false)
 
   const [solutions, setSolutions] = useState(() => {
@@ -535,10 +535,10 @@ export default function App() {
             >
               {autoMode ? '🤖 AUTO ON' : '🤖 AUTO'}
             </button>
-            {/* Indicador de plano */}
+            {/* Indicador de créditos */}
             {(() => {
-              const usado = planoInfo.credito_usado_brl || 0
-              const limite = planoInfo.credito_limite_brl || 2
+              const usado = planoInfo.creditos_usados || 0
+              const limite = planoInfo.creditos_limite || 8
               const pct = Math.min(100, Math.round((usado / limite) * 100))
               const esgotado = usado >= limite
               const cor = planoInfo.plano === 'premium' ? '#9c27b0' : planoInfo.plano === 'pro' ? '#1a73e8' : '#e65100'
@@ -552,7 +552,7 @@ export default function App() {
                   <span style={{ width: 40, height: 4, borderRadius: 4, background: 'var(--se-border)', overflow: 'hidden', display: 'inline-block' }}>
                     <span style={{ display: 'block', width: `${pct}%`, height: '100%', background: esgotado ? '#e65100' : cor, borderRadius: 4 }} />
                   </span>
-                  {esgotado ? 'Crédito esgotado' : `R$${usado.toFixed(2)}/${limite.toFixed(0)}`}
+                  {esgotado ? 'Sem créditos' : `${usado}/${limite} créditos`}
                 </button>
               )
             })()}
@@ -1033,7 +1033,7 @@ export default function App() {
         )}
         {/* Precos tab */}
         {tab === 'PRECOS' && (
-          <Precos user={user} planoAtual={planoInfo.plano} custoAcumulado={planoInfo.custo_acumulado_usd || 0} creditoUsado={planoInfo.credito_usado_brl || 0} creditoLimite={planoInfo.credito_limite_brl || 2} trialUsado={planoInfo.trial_usado || false} verificandoPagamento={verificandoPagamento} accessToken={accessToken} onVoltar={() => setTab('ASSIGNED')} />
+          <Precos user={user} planoAtual={planoInfo.plano} creditosUsados={planoInfo.creditos_usados || 0} creditosLimite={planoInfo.creditos_limite || 8} trialUsado={planoInfo.trial_usado || false} verificandoPagamento={verificandoPagamento} accessToken={accessToken} onVoltar={() => setTab('ASSIGNED')} />
         )}
         </AnimatePresence>
 

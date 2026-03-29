@@ -1,12 +1,13 @@
 const AGENT_URL = 'https://agente-servidor-production.up.railway.app'
 
 export async function buscarPlanoUsuario(userId) {
-  if (!userId) return { plano: 'free', atividades_mes: 0, validade_ate: null, custo_acumulado_usd: 0 }
+  const fallback = { plano: 'free', validade_ate: null, creditos_usados: 0, creditos_limite: 8, trial_usado: false }
+  if (!userId) return fallback
   try {
     const res = await fetch(`${AGENT_URL}/plano/${encodeURIComponent(userId)}`)
-    if (!res.ok) return { plano: 'free', atividades_mes: 0, validade_ate: null, custo_acumulado_usd: 0 }
+    if (!res.ok) return fallback
     return await res.json()
-  } catch { return { plano: 'free', atividades_mes: 0, validade_ate: null, custo_acumulado_usd: 0 } }
+  } catch { return fallback }
 }
 
 export async function cancelarAssinatura(userId, accessToken) {

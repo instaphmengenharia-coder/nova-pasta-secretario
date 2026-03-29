@@ -13,7 +13,7 @@ const PLANOS = [
     cor: '#9e9e9e',
     descricao: 'Para experimentar',
     recursos: [
-      '2 atividades por mês',
+      '8 créditos por mês',
       'Geração de resposta com IA',
       'Chat com IA',
       'Plano semanal básico',
@@ -31,7 +31,7 @@ const PLANOS = [
     destaque: true,
     descricao: 'Para estudantes sérios',
     recursos: [
-      '30 atividades por mês',
+      '80 créditos por mês',
       'Agente no Chrome (automação total)',
       'Notificações WhatsApp',
       'Dashboard de histórico e notas',
@@ -49,7 +49,7 @@ const PLANOS = [
     descricao: 'Para máxima eficiência',
     recursos: [
       'Tudo do Pro',
-      '80 atividades por mês',
+      '120 créditos por mês',
       'Modo automático (faz tudo sozinho)',
       'WhatsApp com resumo diário',
       'Análise de viabilidade avançada',
@@ -59,7 +59,14 @@ const PLANOS = [
   },
 ]
 
-export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, creditoUsado = 0, creditoLimite = 2, trialUsado = false, verificandoPagamento = false, accessToken = null, onVoltar }) {
+const CUSTOS_ATIVIDADE = [
+  { tipo: 'Redação simples',     creditos: 3 },
+  { tipo: 'Google Forms',        creditos: 5 },
+  { tipo: 'Atividade com PDF',   creditos: 8 },
+  { tipo: 'Prova longa / mista', creditos: 10 },
+]
+
+export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, creditosLimite = 8, trialUsado = false, verificandoPagamento = false, accessToken = null, onVoltar }) {
   const [loading, setLoading] = useState(null)
   const [erro, setErro] = useState('')
   const [cancelando, setCancelando] = useState(false)
@@ -138,34 +145,42 @@ export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, 
         </div>
       </div>
 
-      {/* Barra de crédito do mês */}
+      {/* Barra de créditos do mês */}
       {(() => {
-        const pct = Math.min(100, Math.round((creditoUsado / creditoLimite) * 100))
-        const esgotado = creditoUsado >= creditoLimite
+        const pct = Math.min(100, Math.round((creditosUsados / creditosLimite) * 100))
+        const esgotado = creditosUsados >= creditosLimite
+        const cor = pct >= 100 ? '#e65100' : pct > 80 ? '#ff9800' : '#1a73e8'
         return (
-          <div style={{ background: 'var(--se-input)', border: `1px solid ${esgotado ? '#ffb74d' : 'var(--se-border)'}`, borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ background: 'var(--se-input)', border: `1px solid ${esgotado ? '#ffb74d' : 'var(--se-border)'}`, borderRadius: 10, padding: '12px 16px', marginBottom: 8 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
-              <span style={{ color: 'var(--se-t2)', fontWeight: 600 }}>💳 Créditos de IA usados este mês</span>
+              <span style={{ color: 'var(--se-t2)', fontWeight: 600 }}>⚡ Créditos usados este mês</span>
               <span style={{ color: esgotado ? '#e65100' : 'var(--se-t2)', fontWeight: 700 }}>
-                R$ {creditoUsado.toFixed(2)} <span style={{ fontWeight: 400, color: 'var(--se-t3)' }}>de R$ {creditoLimite.toFixed(2)}</span>
+                {creditosUsados} <span style={{ fontWeight: 400, color: 'var(--se-t3)' }}>de {creditosLimite}</span>
               </span>
             </div>
             <div style={{ width: '100%', height: 8, borderRadius: 6, background: 'var(--se-border)', overflow: 'hidden' }}>
-              <div style={{ width: `${pct}%`, height: '100%', borderRadius: 6, background: esgotado ? '#e65100' : pct > 80 ? '#ff9800' : '#1a73e8', transition: 'width 0.4s' }} />
+              <div style={{ width: `${pct}%`, height: '100%', borderRadius: 6, background: cor, transition: 'width 0.4s' }} />
             </div>
             {esgotado && (
-              <div style={{ marginTop: 6, fontSize: 12, color: '#e65100' }}>
-                Créditos esgotados — faça upgrade para continuar usando a IA este mês.
-              </div>
-            )}
-            {custoAcumulado > 0 && (
-              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--se-t3)' }}>
-                Total acumulado desde sempre: US$ {custoAcumulado.toFixed(4)}
+              <div style={{ marginTop: 6, fontSize: 12, color: '#e65100', fontWeight: 600 }}>
+                Seus créditos acabaram — faça upgrade para continuar usando a IA este mês.
               </div>
             )}
           </div>
         )
       })()}
+
+      {/* Custo estimado por tipo de atividade */}
+      <div style={{ background: 'var(--se-input)', border: '1px solid var(--se-border)', borderRadius: 10, padding: '10px 16px', marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--se-t3)', marginBottom: 8 }}>Custo estimado por atividade</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px' }}>
+          {CUSTOS_ATIVIDADE.map(({ tipo, creditos }) => (
+            <div key={tipo} style={{ fontSize: 12, color: 'var(--se-t2)' }}>
+              {tipo} — <strong>~{creditos} créditos</strong>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {verificandoPagamento && (
         <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, color: '#2e7d32' }}>
