@@ -58,7 +58,7 @@ const PLANOS = [
   },
 ]
 
-export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, verificandoPagamento = false, accessToken = null, onVoltar }) {
+export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, trialUsado = false, verificandoPagamento = false, accessToken = null, onVoltar }) {
   const [loading, setLoading] = useState(null)
   const [erro, setErro] = useState('')
   const [cancelando, setCancelando] = useState(false)
@@ -192,6 +192,22 @@ export default function Precos({ user, planoAtual = 'free', custoAcumulado = 0, 
                   </div>
                 ))}
               </div>
+
+              {/* Botão trial 3 dias — só Pro, só free, só quem não usou trial */}
+              {p.id === 'pro' && planoAtual === 'free' && !trialUsado && (
+                <button
+                  onClick={() => handleAssinar('pro_trial')}
+                  disabled={loading === 'pro_trial'}
+                  style={{
+                    width: '100%', padding: '10px 0', borderRadius: 10, fontSize: 14,
+                    fontWeight: 700, cursor: 'pointer', border: '2px solid #1a73e8',
+                    background: 'transparent', color: '#1a73e8', fontFamily: FONT,
+                    marginBottom: 8, opacity: loading === 'pro_trial' ? 0.7 : 1,
+                  }}
+                >
+                  {loading === 'pro_trial' ? 'Redirecionando...' : '🎁 3 dias grátis — depois R$ 39,90/mês'}
+                </button>
+              )}
 
               <button
                 onClick={() => handleAssinar(p.id)}

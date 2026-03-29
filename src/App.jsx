@@ -89,7 +89,7 @@ export default function App() {
   const [autoMode, setAutoMode] = useState(() => localStorage.getItem('se_auto') === '1')
   const [extConnected, setExtConnected] = useState(false)
   const [showExtModal, setShowExtModal] = useState(false)
-  const [planoInfo, setPlanoInfo] = useState({ plano: 'free', atividades_mes: 0, validade_ate: null })
+  const [planoInfo, setPlanoInfo] = useState({ plano: 'free', atividades_mes: 0, validade_ate: null, trial_usado: false, custo_acumulado_usd: 0 })
   const [verificandoPagamento, setVerificandoPagamento] = useState(false)
 
   const [solutions, setSolutions] = useState(() => {
@@ -1034,7 +1034,7 @@ export default function App() {
         )}
         {/* Precos tab */}
         {tab === 'PRECOS' && (
-          <Precos user={user} planoAtual={planoInfo.plano} custoAcumulado={planoInfo.custo_acumulado_usd || 0} verificandoPagamento={verificandoPagamento} accessToken={accessToken} onVoltar={() => setTab('ASSIGNED')} />
+          <Precos user={user} planoAtual={planoInfo.plano} custoAcumulado={planoInfo.custo_acumulado_usd || 0} trialUsado={planoInfo.trial_usado || false} verificandoPagamento={verificandoPagamento} accessToken={accessToken} onVoltar={() => setTab('ASSIGNED')} />
         )}
         </AnimatePresence>
 
