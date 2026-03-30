@@ -27,7 +27,8 @@ const PLANOS = [
     id: 'pro',
     nome: 'Pro',
     preco: 'R$ 39,90',
-    periodo: '/mês',
+    precoPix: 'R$ 39,12',
+    periodo: '/mês no cartão',
     cor: '#1a73e8',
     destaque: true,
     descricao: 'Para estudantes sérios',
@@ -45,7 +46,8 @@ const PLANOS = [
     id: 'premium',
     nome: 'Premium',
     preco: 'R$ 59,90',
-    periodo: '/mês',
+    precoPix: 'R$ 58,78',
+    periodo: '/mês no cartão',
     cor: '#9c27b0',
     descricao: 'Para máxima eficiência',
     recursos: [
@@ -286,9 +288,16 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
               <div style={{ fontSize: 18, fontWeight: 700, color: p.cor, marginBottom: 4 }}>{p.nome}</div>
               <div style={{ fontSize: 12, color: 'var(--se-t3)', marginBottom: 12 }}>{p.descricao}</div>
 
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 2, marginBottom: 20 }}>
-                <span style={{ fontSize: 32, fontWeight: 800, color: 'var(--se-t1)' }}>{p.preco}</span>
-                {p.periodo && <span style={{ fontSize: 13, color: 'var(--se-t3)' }}>{p.periodo}</span>}
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 2 }}>
+                  <span style={{ fontSize: 32, fontWeight: 800, color: 'var(--se-t1)' }}>{p.preco}</span>
+                  {p.periodo && <span style={{ fontSize: 13, color: 'var(--se-t3)' }}>{p.periodo}</span>}
+                </div>
+                {p.precoPix && (
+                  <div style={{ fontSize: 13, color: '#00b57c', fontWeight: 700, marginTop: 4 }}>
+                    ou {p.precoPix} no PIX 💸 <span style={{ fontSize: 11, fontWeight: 600, background: '#e6f9f3', color: '#00966a', borderRadius: 6, padding: '1px 6px' }}>2% off</span>
+                  </div>
+                )}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
