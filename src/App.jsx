@@ -7,6 +7,8 @@ import { useAutoAgent } from './hooks/useAutoAgent'
 import TaskCard from './components/TaskCard'
 import Dashboard from './components/Dashboard'
 import Precos from './components/Precos'
+import LandingPage from './components/LandingPage'
+import Onboarding, { onboardingPendente } from './components/Onboarding'
 import { buscarPlanoUsuario, verificarPagamentoMP } from './hooks/usePlano'
 
 const COURSE_COLORS = [
@@ -91,6 +93,7 @@ export default function App() {
   const [showExtModal, setShowExtModal] = useState(false)
   const [planoInfo, setPlanoInfo] = useState({ plano: 'free', validade_ate: null, creditos_usados: 0, creditos_limite: 8, trial_usado: false })
   const [verificandoPagamento, setVerificandoPagamento] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
 
   const [solutions, setSolutions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('se_solutions') || '{}') } catch { return {} }
@@ -140,6 +143,13 @@ export default function App() {
       setAutoCompleted(c => c + 1)
     }
   }, [autoDone])
+
+  // ── Onboarding: mostra na primeira vez que o aluno loga ───────────────────
+  useEffect(() => {
+    if (isAuthenticated && onboardingPendente()) {
+      setShowOnboarding(true)
+    }
+  }, [isAuthenticated])
 
   // ── Plano do usuário — busca inicial + refresh a cada 5 min ───────────────
   useEffect(() => {
@@ -384,33 +394,20 @@ export default function App() {
 
   const toggleGroup = (key) => setOpenGroups((p) => ({ ...p, [key]: !p[key] }))
 
-  // ── Login ──────────────────────────────────────────────────────────────────
+  // ── Landing Page (não autenticado) ────────────────────────────────────────
   if (!isAuthenticated) {
-    return (
-      <div style={s.loginPage}>
-        <motion.div style={s.loginCard}
-          initial={{ opacity: 0, y: 28, scale: 0.97 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.45, ease: 'easeOut' }}
-        >
-          <ClassroomLogo size={56} />
-          <h1 style={s.loginTitle}>Secretário Escolar</h1>
-          <p style={s.loginSub}>
-            Organize suas tarefas do Google Classroom com ajuda da inteligência artificial.
-          </p>
-          {error && <div style={s.errorAlert}>{error}</div>}
-          <button style={s.googleBtn} onClick={signIn}>
-            <GoogleIcon />
-            Entrar com Google
-          </button>
-          <p style={s.loginHint}>Requer acesso ao Google Classroom</p>
-        </motion.div>
-      </div>
-    )
+    return <LandingPage onSignIn={signIn} error={error} loading={loading} />
   }
 
   return (
     <div style={s.app}>
+
+      {/* ── Onboarding (primeira vez) ─────────────────────────────────────── */}
+      <AnimatePresence>
+        {showOnboarding && (
+          <Onboarding onClose={() => setShowOnboarding(false)} />
+        )}
+      </AnimatePresence>
 
       {/* ── Auto Agent Banner ─────────────────────────────────────────────── */}
       <AnimatePresence>
