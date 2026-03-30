@@ -74,6 +74,7 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
   const [cancelado, setCancelado] = useState(false)
   const [entregas, setEntregas] = useState([])
   const [sucesso, setSucesso] = useState(null)
+  const [pixModal, setPixModal] = useState(null) // { qrCodeBase64, pixCopyPaste, amount, plano }
 
   useEffect(() => {
     if (user?.id && accessToken) buscarEntregas(user.id, accessToken).then(setEntregas).catch(() => {})
@@ -103,6 +104,26 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
     }
   }
 
+  async function handlePix(planoId) {
+    if (!['pro', 'premium'].includes(planoId)) return
+    setErro('')
+    setLoading(`pix_${planoId}`)
+    try {
+      const res = await fetch(`${AGENT_URL}/pagar-pix/${planoId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, email: user?.email }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.erro || 'Erro ao gerar PIX')
+      setPixModal({ qrCodeBase64: data.qrCodeBase64, pixCopyPaste: data.pixCopyPaste, amount: data.amount, plano: planoId })
+    } catch (err) {
+      setErro(err.message)
+    } finally {
+      setLoading(null)
+    }
+  }
+
   async function handleCancelar() {
     if (!window.confirm('Cancelar sua assinatura? Você perderá o acesso ao final do período pago.')) return
     setCancelando(true)
@@ -124,6 +145,43 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
       exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
       style={{ padding: '8px 0', fontFamily: FONT }}
     >
+      {/* Modal PIX */}
+      {pixModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setPixModal(null)}>
+          <div style={{ background: 'var(--se-surface)', borderRadius: 18, padding: 28, maxWidth: 340, width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', textAlign: 'center' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#00b57c', marginBottom: 4 }}>Pagar via PIX</div>
+            <div style={{ fontSize: 13, color: 'var(--se-t3)', marginBottom: 16 }}>
+              Plano {pixModal.plano === 'pro' ? 'Pro' : 'Premium'} — R$ {pixModal.amount?.toFixed(2).replace('.', ',')} / mês
+            </div>
+            {pixModal.qrCodeBase64 && (
+              <img
+                src={`data:image/png;base64,${pixModal.qrCodeBase64}`}
+                alt="QR Code PIX"
+                style={{ width: 200, height: 200, margin: '0 auto 16px', display: 'block', borderRadius: 8, border: '1px solid var(--se-border)' }}
+              />
+            )}
+            <div style={{ fontSize: 12, color: 'var(--se-t3)', marginBottom: 8 }}>Ou copie o código PIX:</div>
+            <div style={{ background: 'var(--se-input)', borderRadius: 8, padding: '8px 10px', fontSize: 11, wordBreak: 'break-all', color: 'var(--se-t2)', marginBottom: 12, maxHeight: 64, overflow: 'hidden', textOverflow: 'ellipsis', userSelect: 'all' }}>
+              {pixModal.pixCopyPaste}
+            </div>
+            <button
+              onClick={() => { navigator.clipboard.writeText(pixModal.pixCopyPaste); setSucesso('Código copiado!') }}
+              style={{ width: '100%', padding: '10px 0', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer', border: 'none', background: '#00b57c', color: '#fff', fontFamily: FONT, marginBottom: 8 }}
+            >
+              Copiar código PIX
+            </button>
+            <div style={{ fontSize: 11, color: 'var(--se-t4)', marginBottom: 12 }}>
+              O plano é ativado automaticamente após a confirmação do pagamento (geralmente em segundos). QR code válido por 30 minutos.
+            </div>
+            <button onClick={() => setPixModal(null)} style={{ fontSize: 12, color: 'var(--se-t3)', background: 'none', border: 'none', cursor: 'pointer' }}>
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
       {sucesso && (
         <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#2e7d32', fontWeight: 600 }}>
           ✅ {sucesso}
@@ -276,6 +334,21 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
               >
                 {isLoading ? 'Redirecionando...' : isAtual ? '✓ Plano atual' : p.btn}
               </button>
+              {/* Botão PIX — só para pro e premium, não logado no plano */}
+              {['pro', 'premium'].includes(p.id) && !isAtual && (
+                <button
+                  onClick={() => handlePix(p.id)}
+                  disabled={loading === `pix_${p.id}`}
+                  style={{
+                    width: '100%', marginTop: 8, padding: '9px 0', borderRadius: 10, fontSize: 13,
+                    fontWeight: 700, cursor: 'pointer', border: '2px solid #00b57c',
+                    background: 'transparent', color: '#00b57c', fontFamily: FONT,
+                    opacity: loading === `pix_${p.id}` ? 0.7 : 1,
+                  }}
+                >
+                  {loading === `pix_${p.id}` ? 'Gerando QR Code...' : 'Pagar via PIX'}
+                </button>
+              )}
               {isAtual && p.id !== 'free' && !cancelado && (
                 <button
                   onClick={handleCancelar}
