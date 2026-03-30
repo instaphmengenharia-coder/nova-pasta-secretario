@@ -220,6 +220,7 @@ Responda APENAS com JSON válido:
           userId,
           tituloAtividade: task.title,
           disciplina: task.courseName,
+          alternateLink: task.alternateLink,
         }),
       })
       const data = await res.json()
