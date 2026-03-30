@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { cancelarAssinatura, buscarEntregas } from '../hooks/usePlano'
-import PagamentoForm from './PagamentoForm'
+
+const AGENT_URL = 'https://agente-servidor-production.up.railway.app'
 
 const FONT = "'Google Sans', 'Roboto', sans-serif"
 
@@ -72,12 +73,35 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
   const [cancelando, setCancelando] = useState(false)
   const [cancelado, setCancelado] = useState(false)
   const [entregas, setEntregas] = useState([])
-  const [planoSelecionado, setPlanoSelecionado] = useState(null) // abre form de pagamento
   const [sucesso, setSucesso] = useState(null)
 
   useEffect(() => {
     if (user?.id && accessToken) buscarEntregas(user.id, accessToken).then(setEntregas).catch(() => {})
   }, [user?.id, accessToken])
+
+  async function handleAssinar(planoId) {
+    if (planoId === 'free') return
+    setErro('')
+    setLoading(planoId)
+    try {
+      const backUrl = window.location.href
+      const res = await fetch(`${AGENT_URL}/assinar/${planoId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, email: user?.email, backUrl }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.erro || 'Erro ao criar assinatura')
+      if (data.checkoutUrl) {
+        window.location.href = data.checkoutUrl
+      } else {
+        throw new Error('URL de checkout não recebida')
+      }
+    } catch (err) {
+      setErro(err.message)
+      setLoading(null)
+    }
+  }
 
   async function handleCancelar() {
     if (!window.confirm('Cancelar sua assinatura? Você perderá o acesso ao final do período pago.')) return
@@ -93,17 +117,6 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
     }
   }
 
-  function handleAssinar(planoId) {
-    if (planoId === 'free') return
-    setErro('')
-    setPlanoSelecionado(planoId)
-  }
-
-  function handlePagamentoSucesso(data) {
-    setPlanoSelecionado(null)
-    setSucesso(data.status === 'authorized' ? 'Assinatura ativada! Aproveite seu plano.' : 'Assinatura criada! Aguardando confirmação do pagamento.')
-  }
-
   return (
     <motion.div
       key="precos"
@@ -111,25 +124,6 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
       exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
       style={{ padding: '8px 0', fontFamily: FONT }}
     >
-      {/* Form de pagamento embutido */}
-      <AnimatePresence>
-        {planoSelecionado && (
-          <motion.div
-            key="pagamento"
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-            style={{ background: 'var(--se-card)', border: '1px solid var(--se-border)', borderRadius: 14, padding: 20, marginBottom: 20 }}
-          >
-            <PagamentoForm
-              plano={planoSelecionado}
-              user={user}
-              onSuccess={handlePagamentoSucesso}
-              onCancel={() => setPlanoSelecionado(null)}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {sucesso && (
         <div style={{ background: '#e8f5e9', border: '1px solid #a5d6a7', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#2e7d32', fontWeight: 600 }}>
           ✅ {sucesso}
