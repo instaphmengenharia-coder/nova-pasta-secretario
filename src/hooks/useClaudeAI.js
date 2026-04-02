@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 
 const CLAUDE_API = 'https://agente-servidor-production.up.railway.app/claude/proxy'
-const MODEL = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-20250514'
+const MODEL = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-6'
 
 async function callClaude(prompt) {
   const res = await fetch(CLAUDE_API, {
@@ -170,6 +170,7 @@ Seja realista, prático e motivador. Máximo 280 palavras.`
         accessToken,
         taskTitle: task.title,
         taskDescription: task.description,
+        task,
         aluno: { nome: 'Aluno', serie: '' },
         estiloExemplos: styleExamples,
         userId,

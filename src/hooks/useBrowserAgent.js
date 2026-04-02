@@ -4,7 +4,7 @@ import { buscarEstilo, getFeedbackContexto } from './useStyleMemory'
 // Todas as chamadas Claude passam pelo proxy Railway — API key nunca exposta no browser
 const CLAUDE_API  = 'https://agente-servidor-production.up.railway.app/claude/proxy'
 const AGENT_URL   = 'https://agente-servidor-production.up.railway.app'
-const MODEL       = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-20250514'
+const MODEL       = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-6'
 const MODEL_HAIKU = import.meta.env.VITE_MODEL_HAIKU  || 'claude-haiku-4-5-20251001'
 const MAX_RETRIES = 3
 const RETRY_DELAY = 3000

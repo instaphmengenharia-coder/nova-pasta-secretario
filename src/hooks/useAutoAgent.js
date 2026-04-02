@@ -10,8 +10,8 @@ async function notifyWhatsApp(phone, taskTitle, courseName, result) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        phone,
-        message: `✅ *Secretário Escolar — AUTO*\n\nAtividade entregue automaticamente!\n\n📚 *${taskTitle}*\n🏫 ${courseName}\n\n${result || 'Concluído com sucesso.'}`,
+        telefone: phone,
+        mensagem: `✅ *Secretário Escolar — AUTO*\n\nAtividade entregue automaticamente!\n\n📚 *${taskTitle}*\n🏫 ${courseName}\n\n${result || 'Concluído com sucesso.'}`,
       }),
     })
   } catch { /* silent */ }

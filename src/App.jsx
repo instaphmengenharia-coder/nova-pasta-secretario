@@ -9,6 +9,7 @@ import Dashboard from './components/Dashboard'
 import Precos from './components/Precos'
 import LandingPage from './components/LandingPage'
 import Onboarding, { onboardingPendente } from './components/Onboarding'
+import PhoneModal from './components/PhoneModal'
 import { buscarPlanoUsuario, verificarPagamentoMP } from './hooks/usePlano'
 
 const COURSE_COLORS = [
@@ -85,15 +86,16 @@ export default function App() {
   const [showSearch, setShowSearch]     = useState(false)
   const [openGroups, setOpenGroups]     = useState({ overdue: true, thisWeek: true, nextWeek: true, later: true, noDate: false })
   const [dark, setDark]                 = useState(() => localStorage.getItem('se_dark') === '1')
-  const [whatsappPhone, setWhatsappPhone] = useState(() => localStorage.getItem('se_phone') || '5511938096314')
+  const [whatsappPhone, setWhatsappPhone] = useState(() => localStorage.getItem('se_phone') || '')
   const [showPhoneInput, setShowPhoneInput] = useState(false)
-  const [phoneInputVal, setPhoneInputVal] = useState(() => localStorage.getItem('se_phone') || '5511938096314')
+  const [phoneInputVal, setPhoneInputVal] = useState(() => localStorage.getItem('se_phone') || '')
   const [autoMode, setAutoMode] = useState(() => localStorage.getItem('se_auto') === '1')
   const [extConnected, setExtConnected] = useState(false)
   const [showExtModal, setShowExtModal] = useState(false)
   const [planoInfo, setPlanoInfo] = useState({ plano: 'free', validade_ate: null, creditos_usados: 0, creditos_limite: 8, trial_usado: false })
   const [verificandoPagamento, setVerificandoPagamento] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showPhoneModal, setShowPhoneModal] = useState(false)
 
   const [solutions, setSolutions] = useState(() => {
     try { return JSON.parse(localStorage.getItem('se_solutions') || '{}') } catch { return {} }
@@ -151,6 +153,15 @@ export default function App() {
     }
   }, [isAuthenticated])
 
+  // ── PhoneModal: pede número se ainda não foi cadastrado ───────────────────
+  useEffect(() => {
+    if (isAuthenticated && !localStorage.getItem('se_phone')) {
+      // Aguarda o onboarding terminar antes de mostrar (800ms)
+      const t = setTimeout(() => setShowPhoneModal(true), 800)
+      return () => clearTimeout(t)
+    }
+  }, [isAuthenticated])
+
   // ── Plano do usuário — busca inicial + refresh a cada 5 min ───────────────
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return
@@ -161,16 +172,16 @@ export default function App() {
     return () => clearInterval(iv)
   }, [isAuthenticated, user?.id])
 
-  // ── Detecta retorno do Mercado Pago e atualiza plano ───────────────────────
+  // ── Detecta retorno do Stripe e atualiza plano ────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const status = params.get('collection_status') || params.get('status')
-    if (!status) return
+    const payment = params.get('payment')
+    if (!payment) return
     window.history.replaceState({}, '', window.location.pathname)
-    if (status === 'approved' && user?.id) {
+    if (payment === 'success' && user?.id) {
       setTab('PRECOS')
       setVerificandoPagamento(true)
-      // Consulta MP diretamente para ativar plano sem depender do webhook
+      // Aguarda webhook processar (3s) e então busca plano atualizado
       verificarPagamentoMP(user.id)
         .then(resultado => {
           if (resultado?.ativado) {
@@ -406,6 +417,21 @@ export default function App() {
       <AnimatePresence>
         {showOnboarding && (
           <Onboarding onClose={() => setShowOnboarding(false)} />
+        )}
+      </AnimatePresence>
+
+      {/* ── PhoneModal (pede número WhatsApp após login) ──────────────────── */}
+      <AnimatePresence>
+        {showPhoneModal && !showOnboarding && (
+          <PhoneModal
+            userId={user?.id}
+            onSave={(telefone) => {
+              setWhatsappPhone(telefone)
+              setPhoneInputVal(telefone)
+              setShowPhoneModal(false)
+            }}
+            onDismiss={() => setShowPhoneModal(false)}
+          />
         )}
       </AnimatePresence>
 
@@ -660,6 +686,13 @@ export default function App() {
             localStorage.setItem('se_phone', phoneInputVal)
             setWhatsappPhone(phoneInputVal)
             setShowPhoneInput(false)
+            if (user?.id && phoneInputVal) {
+              fetch('https://agente-servidor-production.up.railway.app/usuario/telefone', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, telefone: phoneInputVal }),
+              }).catch(() => {})
+            }
           }}>Salvar</button>
           {whatsappPhone && (
             <button style={s.phoneClearBtn} onClick={() => {

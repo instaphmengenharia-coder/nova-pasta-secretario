@@ -46,7 +46,7 @@ const PLANOS = [
     id: 'premium',
     nome: 'Premium',
     preco: 'R$ 59,90',
-    precoPix: 'R$ 58,78',
+    precoPix: 'R$ 58,70',
     periodo: '/mês no cartão',
     cor: '#9c27b0',
     descricao: 'Para máxima eficiência',
@@ -60,6 +60,12 @@ const PLANOS = [
     ],
     btn: 'Assinar Premium',
   },
+]
+
+const PACOTES_CREDITOS = [
+  { id: 'starter', nome: 'Starter', creditos: 15, preco: 'R$ 8,25',  descricao: '15 créditos', cor: '#9e9e9e' },
+  { id: 'basic',   nome: 'Basic',   creditos: 40, preco: 'R$ 22,00', descricao: '40 créditos', cor: '#1a73e8' },
+  { id: 'full',    nome: 'Full',    creditos: 80, preco: 'R$ 44,00', descricao: '80 créditos', cor: '#9c27b0' },
 ]
 
 const CUSTOS_ATIVIDADE = [
@@ -105,8 +111,27 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
     }
   }
 
+  async function handleComprarCreditos(pacoteId) {
+    setErro('')
+    setLoading(`creditos_${pacoteId}`)
+    try {
+      const backUrl = window.location.href
+      const res = await fetch(`${AGENT_URL}/comprar-creditos/${pacoteId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user?.id, email: user?.email, backUrl }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.erro || 'Erro ao criar checkout')
+      if (data.checkoutUrl) window.location.href = data.checkoutUrl
+      else throw new Error('URL de checkout não recebida')
+    } catch (err) {
+      setErro(err.message)
+      setLoading(null)
+    }
+  }
+
   async function handlePix(planoId) {
-    if (!['pro', 'premium'].includes(planoId)) return
     setErro('')
     setLoading(`pix_${planoId}`)
     try {
@@ -118,11 +143,8 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.erro || 'Erro ao gerar PIX')
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl
-      } else {
-        throw new Error('URL de checkout PIX não recebida')
-      }
+      if (data.checkoutUrl) window.location.href = data.checkoutUrl
+      else throw new Error('URL de checkout PIX não recebida')
     } catch (err) {
       setErro(err.message)
       setLoading(null)
@@ -161,7 +183,7 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
           Escolha seu plano
         </div>
         <div style={{ fontSize: 14, color: 'var(--se-t3)' }}>
-          Cancele quando quiser · Cobrado via Mercado Pago
+          Cancele quando quiser · Cobrado via Stripe
         </div>
       </div>
 
@@ -259,11 +281,6 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
                   <span style={{ fontSize: 32, fontWeight: 800, color: 'var(--se-t1)' }}>{p.preco}</span>
                   {p.periodo && <span style={{ fontSize: 13, color: 'var(--se-t3)' }}>{p.periodo}</span>}
                 </div>
-                {p.precoPix && (
-                  <div style={{ fontSize: 13, color: '#00b57c', fontWeight: 700, marginTop: 4 }}>
-                    ou {p.precoPix} no PIX 💸 <span style={{ fontSize: 11, fontWeight: 600, background: '#e6f9f3', color: '#00966a', borderRadius: 6, padding: '1px 6px' }}>2% off</span>
-                  </div>
-                )}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
@@ -279,22 +296,6 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
                 ))}
               </div>
 
-              {/* Botão trial 3 dias — só Pro, só free, só quem não usou trial */}
-              {p.id === 'pro' && planoAtual === 'free' && !trialUsado && (
-                <button
-                  onClick={() => handleAssinar('pro_trial')}
-                  disabled={loading === 'pro_trial'}
-                  style={{
-                    width: '100%', padding: '10px 0', borderRadius: 10, fontSize: 14,
-                    fontWeight: 700, cursor: 'pointer', border: '2px solid #1a73e8',
-                    background: 'transparent', color: '#1a73e8', fontFamily: FONT,
-                    marginBottom: 8, opacity: loading === 'pro_trial' ? 0.7 : 1,
-                  }}
-                >
-                  {loading === 'pro_trial' ? 'Redirecionando...' : '🎁 3 dias grátis — depois R$ 39,90/mês'}
-                </button>
-              )}
-
               <button
                 onClick={() => handleAssinar(p.id)}
                 disabled={p.disabled || isAtual || isLoading}
@@ -309,21 +310,8 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
               >
                 {isLoading ? 'Redirecionando...' : isAtual ? '✓ Plano atual' : p.btn}
               </button>
-              {/* Botão PIX — só para pro e premium, não logado no plano */}
-              {['pro', 'premium'].includes(p.id) && !isAtual && (
-                <button
-                  onClick={() => handlePix(p.id)}
-                  disabled={loading === `pix_${p.id}`}
-                  style={{
-                    width: '100%', marginTop: 8, padding: '9px 0', borderRadius: 10, fontSize: 13,
-                    fontWeight: 700, cursor: 'pointer', border: '2px solid #00b57c',
-                    background: 'transparent', color: '#00b57c', fontFamily: FONT,
-                    opacity: loading === `pix_${p.id}` ? 0.7 : 1,
-                  }}
-                >
-                  {loading === `pix_${p.id}` ? 'Gerando QR Code...' : 'Pagar via PIX'}
-                </button>
-              )}
+
+
               {isAtual && p.id !== 'free' && !cancelado && (
                 <button
                   onClick={handleCancelar}
@@ -339,7 +327,49 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
       </div>
 
       <div style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--se-t4)' }}>
-        Pagamento seguro via Mercado Pago · Cancele quando quiser pelo app
+        Pagamento seguro via Stripe · Cancele quando quiser pelo app
+      </div>
+
+      {/* Créditos avulsos */}
+      <div style={{ marginTop: 36 }}>
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--se-t1)', marginBottom: 4 }}>
+            Prefere sem assinatura?
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--se-t3)', marginBottom: 4 }}>
+            Compre créditos avulsos — sem renovação automática, sem compromisso
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {PACOTES_CREDITOS.map((p) => (
+            <div key={p.id} style={{
+              background: 'var(--se-surface)', border: '1px solid var(--se-border)',
+              borderRadius: 14, padding: '18px 20px', minWidth: 160, flex: 1, maxWidth: 220, textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: p.cor, marginBottom: 2 }}>{p.nome}</div>
+              <div style={{ fontSize: 11, color: 'var(--se-t3)', marginBottom: 10 }}>{p.descricao}</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--se-t1)', marginBottom: 2 }}>{p.preco}</div>
+              <div style={{ fontSize: 13, color: 'var(--se-t2)', marginBottom: 14 }}>
+                ⚡ <strong>{p.creditos} créditos</strong>
+              </div>
+              <button
+                onClick={() => handleComprarCreditos(p.id)}
+                disabled={loading === `creditos_${p.id}`}
+                style={{
+                  width: '100%', padding: '9px 0', borderRadius: 8, fontSize: 13,
+                  fontWeight: 700, cursor: 'pointer', border: 'none', fontFamily: FONT,
+                  background: p.cor, color: '#fff',
+                  opacity: loading === `creditos_${p.id}` ? 0.7 : 1,
+                }}
+              >
+                {loading === `creditos_${p.id}` ? 'Redirecionando...' : 'Comprar'}
+              </button>
+            </div>
+          ))}
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 10, fontSize: 11, color: 'var(--se-t4)' }}>
+          Créditos somam com seu plano atual · Não expiram no mês
+        </div>
       </div>
 
       {/* Histórico de entregas */}

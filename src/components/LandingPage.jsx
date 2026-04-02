@@ -113,7 +113,7 @@ export default function LandingPage({ onSignIn, error, loading }) {
             </div>
           ) : (
             <iframe
-              src="https://www.youtube.com/embed/?autoplay=1"
+              src="https://www.youtube.com/embed/w3SmeS0nkcA?autoplay=1"
               style={{ width: '100%', height: '100%', border: 'none', position: 'absolute', inset: 0 }}
               allow="autoplay; fullscreen"
               title="Demo Secretário Escolar"
@@ -203,7 +203,7 @@ export default function LandingPage({ onSignIn, error, loading }) {
       <footer style={{ padding: '32px 24px', textAlign: 'center', borderTop: '1px solid #e8eaed' }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>📚 Secretário Escolar</div>
         <div style={{ fontSize: 12, color: '#9aa0a6' }}>
-          Pagamento seguro via Mercado Pago · Não é afiliado ao Google
+          Pagamento seguro via Stripe · Não é afiliado ao Google
         </div>
       </footer>
 
