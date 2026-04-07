@@ -815,7 +815,7 @@ Responda APENAS com JSON válido:
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {!running && !done && (
                 <button style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 0', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-                  onClick={() => runAgent(task, { userId, objetivo: preChatObjetivoRef.current, whatsappPhone, nomeAluno: task.studentName || '' }, viabilidade)}>▶ Iniciar Agente</button>
+                  onClick={() => runAgent(task, { userId, accessToken, objetivo: preChatObjetivoRef.current, whatsappPhone, nomeAluno: task.studentName || '' }, viabilidade)}>▶ Iniciar Agente</button>
               )}
               {running && !paused && (
                 <>

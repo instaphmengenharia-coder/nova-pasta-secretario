@@ -268,14 +268,17 @@ async function sendExtCmd(cmd, addLog, attempt = 1) {
   }
 }
 
-// Resultado curto → ação mecânica → Haiku; resultado longo (read_page) → Sonnet
+// Sempre Sonnet — o agente precisa raciocinar em cada passo.
+// Haiku só para resultados de ações puramente mecânicas (navigate ok, wait, fill ok).
+const MECHANICAL_PATTERNS = /^(Resultado: navegou|Resultado: ok|Resultado: preenchido|Resultado: clicou|Page navigated|Clicked|Filled|true|null)/i
 function chooseModel(lastUserMsg) {
-  if (!lastUserMsg) return MODEL // primeiro passo → Sonnet
-  const txt = typeof lastUserMsg === 'string' ? lastUserMsg : lastUserMsg?.content || ''
-  // read_page retorna HTML/texto longo → Sonnet para raciocinar
-  if (txt.length > 300) return MODEL
-  // Resultado de ação mecânica curta → Haiku
-  return MODEL_HAIKU
+  if (!lastUserMsg) return MODEL
+  const txt = typeof lastUserMsg === 'string' ? lastUserMsg
+    : Array.isArray(lastUserMsg) ? JSON.stringify(lastUserMsg)
+    : lastUserMsg?.content || ''
+  if (txt.length > 200) return MODEL  // leitura de página → Sonnet
+  if (MECHANICAL_PATTERNS.test(txt.trim())) return MODEL_HAIKU
+  return MODEL  // por padrão Sonnet
 }
 
 // ─── Claude API ───────────────────────────────────────────────────────────────
@@ -313,7 +316,8 @@ async function callClaude(_apiKey, messages, systemPrompt, retry = 0) {
       trimmed = await summarizeOldMessages(null, messages)
       await acquireLock()
     } else if (messages.length > 5) {
-      trimmed = messages.slice(-5)
+      // Sempre preserva a primeira mensagem (contexto da atividade + resposta pré-gerada)
+      trimmed = [messages[0], ...messages.slice(-4)]
     }
     const lastUser = [...trimmed].reverse().find(m => m.role === 'user')
     const model = chooseModel(lastUser?.content)
@@ -321,7 +325,7 @@ async function callClaude(_apiKey, messages, systemPrompt, retry = 0) {
     const res = await fetch(CLAUDE_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 512, system: systemPrompt, messages: trimmed }),
+      body: JSON.stringify({ model, max_tokens: 1024, system: systemPrompt, messages: trimmed }),
     })
     // Rate limit → aguarda e tenta de novo (até 3x, intervalo crescente)
     if (res.status === 429 && retry < 3) {
@@ -444,7 +448,37 @@ export function useBrowserAgent() {
       const tipoLabel = { dissertativa: 'Dissertativa', multipla_escolha: 'Múltipla escolha', formulario: 'Formulário', calculo: 'Cálculo', pesquisa: 'Pesquisa', redacao: 'Redação', default: 'Geral' }
       addLog('info', `📊 Tipo detectado: ${tipoLabel[tipo] || tipo} — usando estratégia especializada`)
 
-      // ── 2. Buscar estilo do aluno ──────────────────────────────────────────
+      // ── 2. Pré-gerar resposta com contexto completo (PDFs, Docs, etc.) ──────
+      // O agente vira apenas um "entregador" — muito mais certeiro
+      let preAnswer = null
+      if (opts?.accessToken && task.courseId && task.id && task.alternateLink) {
+        try {
+          addLog('info', '📖 Lendo materiais da atividade antes de abrir o Chrome...')
+          const res = await fetch(`${AGENT_URL}/atividade/resolver-url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              url: task.alternateLink,
+              courseId: task.courseId,
+              workId: task.id,
+              accessToken: opts.accessToken,
+              taskTitle: task.title,
+              taskDescription: task.description,
+              task,
+              userId: opts.userId,
+            }),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            if (data.rascunho) {
+              preAnswer = data.rascunho
+              addLog('info', `✅ Resposta pré-gerada pela IA (${preAnswer.length} caracteres) — agente só precisa colar e entregar`)
+            }
+          }
+        } catch { /* silencioso — agente continua sem a pré-geração */ }
+      }
+
+      // ── 3. Buscar estilo do aluno ──────────────────────────────────────────
       let estiloContexto = ''
       const userId = opts.userId
       if (userId && task.courseName) {
@@ -459,7 +493,7 @@ export function useBrowserAgent() {
       const feedbackContexto = getFeedbackContexto(task.courseName)
       if (feedbackContexto) addLog('info', '📊 Feedback de notas anteriores carregado')
 
-      // ── 3. Montar system prompt especializado ──────────────────────────────
+      // ── 4. Montar system prompt especializado ──────────────────────────────
       const systemPrompt = getPrompt(tipo) + estiloContexto + feedbackContexto
 
       const messages = [{
@@ -473,6 +507,9 @@ export function useBrowserAgent() {
           task.dueDate ? `Prazo: ${new Date(task.dueDate).toLocaleString('pt-BR')}` : '',
           `Tipo: ${tipo}`,
           opts?.objetivo ? `OBJETIVO DEFINIDO PELO ALUNO: ${opts.objetivo}` : '',
+          preAnswer
+            ? `\nRESPOSTA JÁ GERADA PELA IA — cole exatamente no campo de texto do Classroom:\n"""\n${preAnswer}\n"""\nNão precisa pensar na resposta. Só navegue, cole e entregue.`
+            : '',
           `IMPORTANTE: Seu PRIMEIRO passo deve ser {"action":"navigate","url":"${task.alternateLink}"} — vá direto para esta URL, não use o menu do Classroom. Use "review" antes de submeter.`,
         ].filter(Boolean).join('\n'),
       }]
