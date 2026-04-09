@@ -202,8 +202,12 @@ export default function LandingPage({ onSignIn, error, loading }) {
       {/* ── Footer ── */}
       <footer style={{ padding: '32px 24px', textAlign: 'center', borderTop: '1px solid #e8eaed' }}>
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>📚 Secretário Escolar</div>
-        <div style={{ fontSize: 12, color: '#9aa0a6' }}>
-          Pagamento seguro via Stripe · Não é afiliado ao Google
+        <div style={{ fontSize: 12, color: '#9aa0a6', marginBottom: 8 }}>
+          Pagamento seguro via MercadoPago · Não é afiliado ao Google
+        </div>
+        <div style={{ fontSize: 12 }}>
+          <a href="/privacidade" style={{ color: '#5f6368', textDecoration: 'none', marginRight: 16 }}>Política de Privacidade</a>
+          <a href="/privacidade#termos" style={{ color: '#5f6368', textDecoration: 'none' }}>Termos de Uso</a>
         </div>
       </footer>
 

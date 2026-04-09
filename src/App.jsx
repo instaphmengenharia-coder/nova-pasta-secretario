@@ -11,6 +11,9 @@ import LandingPage from './components/LandingPage'
 import Onboarding, { onboardingPendente } from './components/Onboarding'
 import PhoneModal from './components/PhoneModal'
 import { buscarPlanoUsuario, verificarPagamentoMP } from './hooks/usePlano'
+import Privacidade from './components/Privacidade'
+
+const ROTA_PRIVACIDADE = window.location.pathname === '/privacidade'
 
 const COURSE_COLORS = [
   '#1a73e8','#e91e63','#9c27b0','#ff5722',
@@ -161,6 +164,13 @@ export default function App() {
       return () => clearTimeout(t)
     }
   }, [isAuthenticated])
+
+  // ── Sincroniza userId+accessToken com a extensão Chrome ──────────────────
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id || !accessToken) return
+    // Envia para bridge.js salvar no chrome.storage.local (popup usa para créditos)
+    window.postMessage({ type: 'SE_SET_USER', userId: user.id, accessToken }, '*')
+  }, [isAuthenticated, user?.id, accessToken])
 
   // ── Plano do usuário — busca inicial + refresh a cada 5 min ───────────────
   useEffect(() => {
@@ -404,6 +414,9 @@ export default function App() {
   )
 
   const toggleGroup = (key) => setOpenGroups((p) => ({ ...p, [key]: !p[key] }))
+
+  // ── Rotas públicas ────────────────────────────────────────────────────────
+  if (ROTA_PRIVACIDADE) return <Privacidade />
 
   // ── Landing Page (não autenticado) ────────────────────────────────────────
   if (!isAuthenticated) {
