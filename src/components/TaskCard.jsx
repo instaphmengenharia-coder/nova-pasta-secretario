@@ -252,6 +252,10 @@ Responda APENAS com JSON válido:
   const [aiInsights, setAiInsights] = useState(null) // { raciocinio, pontos, confianca }
   const [showInsights, setShowInsights] = useState(false)
 
+  const [modoCadernoAtivo, setModoCadernoAtivo] = useState(false)
+  const [modoCaderno, setModoCaderno] = useState(null) // { ativo, promptGrok, nivelEscolar }
+  const [mcCopied, setMcCopied] = useState(false)
+
   const handleSolveClick = async (e) => {
     e.stopPropagation()
     setSolveOpen(true)
@@ -279,11 +283,12 @@ Responda APENAS com JSON válido:
     setSolveError(null)
     setContextMateriais([])
     try {
-      const { text, raciocinio, pontos, confianca, materiais, custo_usd, tokens, materia, retried } = await solveTaskWithContext(task, accessToken, styleExamples, userId)
+      const { text, raciocinio, pontos, confianca, materiais, custo_usd, tokens, materia, retried, modoCaderno: mc } = await solveTaskWithContext(task, accessToken, styleExamples, userId, modoCadernoAtivo || undefined)
       setSolution(text)
       setEditedSolution(text)
       setContextMateriais(materiais)
       if (raciocinio || pontos?.length || custo_usd != null) setAiInsights({ raciocinio, pontos, confianca, custo_usd, tokens, materia, retried })
+      if (mc?.ativo) setModoCaderno(mc)
       onSolutionSaved?.(text)
     } catch (err) {
       setSolveError(err.message)
@@ -453,6 +458,23 @@ Responda APENAS com JSON válido:
                 <button style={styles.aiBtn} onClick={handleAIClick}>
                   ✦ Dicas da IA
                 </button>
+                {task.status !== 'TURNED_IN' && solveTaskWithContext && accessToken && !solution && (
+                  <button
+                    onClick={() => setModoCadernoAtivo(v => !v)}
+                    title="Humaniza o texto para soar mais natural, como um aluno escreveria"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '5px 12px', borderRadius: 20, border: '1px solid',
+                      borderColor: modoCadernoAtivo ? '#8b5cf6' : 'var(--se-border)',
+                      background: modoCadernoAtivo ? '#f3e8ff' : 'transparent',
+                      color: modoCadernoAtivo ? '#7c3aed' : 'var(--se-t3)',
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: FONT,
+                    }}
+                  >
+                    <span style={{ fontSize: 14 }}>📓</span>
+                    Modo Caderno {modoCadernoAtivo ? 'On' : 'Off'}
+                  </button>
+                )}
                 {task.status !== 'TURNED_IN' && (
                   <>
                     <button
@@ -967,6 +989,45 @@ Responda APENAS com JSON válido:
                   <button style={styles.copyBtn} onClick={handleCopy}>
                     {copied ? '✓ Copiado!' : '⎘ Copiar resposta'}
                   </button>
+
+                  {/* ── Modo Caderno ── */}
+                  {modoCaderno?.ativo && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      style={{ marginTop: 12, background: 'linear-gradient(135deg, #f3e8ff 0%, #ede9fe 100%)', border: '1px solid #c4b5fd', borderRadius: 12, padding: '14px 16px' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 20 }}>📓</span>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: '#6d28d9' }}>Modo Caderno</span>
+                        <span style={{ fontSize: 11, background: '#ddd6fe', color: '#6d28d9', borderRadius: 20, padding: '1px 8px', fontWeight: 600 }}>
+                          {modoCaderno.motivo === 'auto' ? 'Automático' : 'Ativado'}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: 13, color: '#5b21b6', margin: '0 0 12px', lineHeight: 1.5 }}>
+                        Humanize essa resposta no Grok para soar como você — não como IA. Cole o prompt abaixo lá.
+                      </p>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(modoCaderno.promptGrok)
+                          setMcCopied(true)
+                          setTimeout(() => setMcCopied(false), 2500)
+                        }}
+                        style={{ width: '100%', padding: '9px 0', borderRadius: 8, border: 'none', background: mcCopied ? '#6d28d9' : '#7c3aed', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginBottom: 8 }}
+                      >
+                        {mcCopied ? '✓ Prompt copiado!' : '⎘ Copiar prompt para o Grok'}
+                      </button>
+                      <a
+                        href="https://grok.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ display: 'block', textAlign: 'center', fontSize: 12, color: '#7c3aed', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        Abrir Grok ↗
+                      </a>
+                    </motion.div>
+                  )}
 
                   {/* Raciocínio e pontos de atenção */}
                   {aiInsights && (
