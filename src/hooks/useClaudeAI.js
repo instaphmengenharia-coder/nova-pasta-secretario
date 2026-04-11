@@ -189,7 +189,6 @@ Seja realista, prático e motivador. Máximo 280 palavras.`
       pontos: data.pontos_de_atencao || [],
       confianca: data.confianca || null,
       materiais: data.materiais || [],
-      custo_usd: data._custo_usd ?? null,
       tokens: data._tokens ?? null,
       materia: data._materia || null,
       retried: data._retried || false,

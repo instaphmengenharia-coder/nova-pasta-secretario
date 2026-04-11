@@ -283,11 +283,11 @@ Responda APENAS com JSON válido:
     setSolveError(null)
     setContextMateriais([])
     try {
-      const { text, raciocinio, pontos, confianca, materiais, custo_usd, tokens, materia, retried, modoCaderno: mc } = await solveTaskWithContext(task, accessToken, styleExamples, userId, modoCadernoAtivo || undefined)
+      const { text, raciocinio, pontos, confianca, materiais, tokens, materia, retried, modoCaderno: mc } = await solveTaskWithContext(task, accessToken, styleExamples, userId, modoCadernoAtivo || undefined)
       setSolution(text)
       setEditedSolution(text)
       setContextMateriais(materiais)
-      if (raciocinio || pontos?.length || custo_usd != null) setAiInsights({ raciocinio, pontos, confianca, custo_usd, tokens, materia, retried })
+      if (raciocinio || pontos?.length) setAiInsights({ raciocinio, pontos, confianca, tokens, materia, retried })
       if (mc?.ativo) setModoCaderno(mc)
       onSolutionSaved?.(text)
     } catch (err) {
@@ -712,7 +712,6 @@ Responda APENAS com JSON válido:
                 {preChatPlan.tokens_estimados && (
                   <div style={{ fontSize: 11, color: '#555' }}>
                     ~{preChatPlan.tokens_estimados.toLocaleString()} tokens estimados
-                    {' '}(≈ USD ${((preChatPlan.tokens_estimados / 1000000) * 3).toFixed(4)})
                   </div>
                 )}
               </div>
@@ -1061,7 +1060,7 @@ Responda APENAS com JSON válido:
                               </ul>
                             </div>
                           )}
-                          {(aiInsights.custo_usd != null || aiInsights.materia || aiInsights.retried) && (
+                          {(aiInsights.materia || aiInsights.retried) && (
                             <div style={{ borderTop: '1px solid var(--se-border)', paddingTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                               {aiInsights.materia && aiInsights.materia !== 'geral' && (
                                 <span style={{ fontSize: 11, background: 'var(--se-bg)', border: '1px solid var(--se-border)', borderRadius: 20, padding: '2px 8px', color: 'var(--se-t3)' }}>
@@ -1071,11 +1070,6 @@ Responda APENAS com JSON válido:
                               {aiInsights.retried && (
                                 <span style={{ fontSize: 11, background: '#fff3e0', border: '1px solid #ffb74d', borderRadius: 20, padding: '2px 8px', color: '#e65100' }}>
                                   🔄 Refeita (baixa confiança)
-                                </span>
-                              )}
-                              {aiInsights.custo_usd != null && (
-                                <span style={{ fontSize: 11, color: 'var(--se-t3)', marginLeft: 'auto' }}>
-                                  💰 <strong style={{ color: 'var(--se-t2)' }}>US$ {aiInsights.custo_usd.toFixed(4)}</strong>
                                 </span>
                               )}
                             </div>
