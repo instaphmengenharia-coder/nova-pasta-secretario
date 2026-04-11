@@ -311,6 +311,20 @@ export default function Precos({ user, planoAtual = 'free', creditosUsados = 0, 
                 {isLoading ? 'Redirecionando...' : isAtual ? '✓ Plano atual' : p.btn}
               </button>
 
+              {p.precoPix && !isAtual && (
+                <button
+                  onClick={() => handlePix(p.id)}
+                  disabled={loading === `pix_${p.id}`}
+                  style={{
+                    width: '100%', marginTop: 8, padding: '8px 0', borderRadius: 10, fontSize: 13,
+                    fontWeight: 600, cursor: 'pointer', fontFamily: FONT,
+                    border: `1px solid ${p.cor}`, background: 'transparent', color: p.cor,
+                    opacity: loading === `pix_${p.id}` ? 0.7 : 1,
+                  }}
+                >
+                  {loading === `pix_${p.id}` ? 'Redirecionando...' : `Pagar via PIX ${p.precoPix}/mês`}
+                </button>
+              )}
 
               {isAtual && p.id !== 'free' && !cancelado && (
                 <button
