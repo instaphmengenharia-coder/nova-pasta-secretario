@@ -1,7 +1,7 @@
 const AGENT_URL = 'https://agente-servidor-production.up.railway.app'
 
 export async function buscarPlanoUsuario(userId) {
-  const fallback = { plano: 'free', validade_ate: null, creditos_usados: 0, creditos_limite: 8, trial_usado: false }
+  const fallback = { plano: 'free', validade_ate: null, creditos_usados: 0, creditos_limite: 6, trial_usado: false }
   if (!userId) return fallback
   try {
     const res = await fetch(`${AGENT_URL}/plano/${encodeURIComponent(userId)}`)

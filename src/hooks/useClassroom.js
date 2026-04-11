@@ -62,7 +62,11 @@ export function useClassroom() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: response.code }),
       })
-      if (!res.ok) throw new Error(`Servidor retornou ${res.status}`)
+      if (!res.ok) {
+        let msg = `Servidor retornou ${res.status}`
+        try { const body = await res.json(); if (body?.erro) msg = body.erro } catch {}
+        throw new Error(msg)
+      }
       const { accessToken: token, refreshToken: rToken, userId, name, photo } = await res.json()
       setAccessToken(token)
       if (rToken) setRefreshToken(rToken)

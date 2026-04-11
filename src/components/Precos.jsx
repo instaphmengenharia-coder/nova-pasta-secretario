@@ -14,7 +14,7 @@ const PLANOS = [
     cor: '#9e9e9e',
     descricao: 'Para experimentar',
     recursos: [
-      '8 créditos por mês',
+      '6 créditos por mês',
       'Geração de resposta com IA',
       'Chat com IA',
       'Plano semanal básico',
