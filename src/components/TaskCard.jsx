@@ -58,6 +58,36 @@ export default function TaskCard({ task, isUrgent, courseColor = '#1a73e8', cach
 
   const { running, paused, log, done, pendingReview, elapsed, runAgent, stop, pause, resume, reset, approveReview, rejectReview } = useBrowserAgent()
 
+  // Reset task-specific UI state when a different task is rendered
+  useEffect(() => {
+    setExpanded(false)
+    setModalOpen(false)
+    setAnalysis(null)
+    setLoading(false)
+    setAiError(null)
+    setSolveOpen(false)
+    setSolution(cachedSolution || null)
+    setSolveLoading(false)
+    setSolveError(null)
+    setCopied(false)
+    setEditMode(false)
+    setEditedSolution(cachedSolution || '')
+    setChatMessages([])
+    setChatInput('')
+    setWhatsappSending(false)
+    setWhatsappSent(false)
+    setDelivering(false)
+    setDelivered(false)
+    setDeliverError(null)
+    setAgentOpen(false)
+    setViabilidade(null)
+    setViabilidadeOpen(false)
+    setPreChatOpen(false)
+    setPreChatMsgs([])
+    setPreChatInput('')
+    setPreChatPlan(null)
+  }, [task.id])
+
   function fmtElapsed(s) {
     if (s < 60) return `${s}s`
     return `${Math.floor(s / 60)}m ${s % 60}s`
@@ -98,8 +128,18 @@ Responda APENAS com JSON válido:
   async function callHaikuPC(history) {
     const res = await fetch(PC_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: PC_MODEL, max_tokens: 400, system: PC_SYSTEM, messages: history }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({
+        model: PC_MODEL,
+        max_tokens: 400,
+        system: PC_SYSTEM,
+        messages: history,
+        ...(userId ? { userId } : {}),
+        ...(accessToken ? { accessToken } : {}),
+      }),
     })
     if (!res.ok) throw new Error(`API ${res.status}`)
     const data = await res.json()
@@ -174,7 +214,7 @@ Responda APENAS com JSON válido:
         if (cached && Date.now() - cached.ts < 24 * 60 * 60 * 1000) analise = cached.data
       } catch {}
       if (!analise) {
-        analise = await analisarViabilidade(task)
+        analise = await analisarViabilidade(task, userId, accessToken)
         try { localStorage.setItem(cacheKey, JSON.stringify({ data: analise, ts: Date.now() })) } catch {}
       }
       setViabilidade(analise)
@@ -241,7 +281,7 @@ Responda APENAS com JSON válido:
     }
   }, [cachedSolution])
 
-  const { analyzeTask, solveTask, refineAnswer } = useClaudeAI()
+  const { analyzeTask, solveTask, refineAnswer } = useClaudeAI({ userId, accessToken })
 
   const urgent = isUrgent && task.status !== 'TURNED_IN'
   const cfg = urgent
@@ -796,7 +836,7 @@ Responda APENAS com JSON válido:
                   <button onClick={() => {
                     // Salvar estilo antes de aprovar
                     if (userId && pendingReview?.answer) {
-                      salvarEstilo({ userId, materia: task.courseName, resposta: pendingReview.answer })
+                      salvarEstilo({ userId, materia: task.courseName, resposta: pendingReview.answer, accessToken })
                     }
                     approveReview()
                   }} style={{ flex: 1, background: '#0f9d58', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 0', fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>✅ Aprovar e Enviar</button>

@@ -10,7 +10,7 @@ export async function buscarEstilo(userId, materia) {
   } catch { return null }
 }
 
-export async function salvarEstilo({ userId, materia, resposta, respostaEditada }) {
+export async function salvarEstilo({ userId, materia, resposta, respostaEditada, accessToken }) {
   if (!userId || !materia || !resposta) return
   try {
     // Calculate average word count
@@ -29,7 +29,10 @@ export async function salvarEstilo({ userId, materia, resposta, respostaEditada 
 
     await fetch(`${AGENT_URL}/estilo/salvar`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+      },
       body: JSON.stringify({
         userId,
         materia,
@@ -37,6 +40,7 @@ export async function salvarEstilo({ userId, materia, resposta, respostaEditada 
         vocabularioComum: vocab,
         tamanhoMedioResposta: palavras,
         tom,
+        ...(accessToken ? { accessToken } : {}),
       }),
     })
   } catch { /* silent — style memory is optional */ }

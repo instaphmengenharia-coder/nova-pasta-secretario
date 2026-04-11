@@ -63,14 +63,14 @@ export default function App() {
   const {
     analyzePriorities, dashboardAnalysis, dashboardLoading, dashboardError, solveTask,
     solveTaskWithContext, generateWeeklyPlan, weeklyPlan, weeklyPlanLoading, weeklyPlanError,
-  } = useClaudeAI()
+  } = useClaudeAI({ userId: user?.id, accessToken })
 
   const {
     difficulty, patterns, classifying,
     classifyBatch, recordSubmission, analyzePatterns,
     sortByPriority, canAnalyzePatterns, patternsLoading, patternsError,
     submissionCount, clearMLData,
-  } = useML()
+  } = useML({ userId: user?.id, accessToken })
 
   const [tab, setTab]                   = useState('ASSIGNED')
   const [readNotices, setReadNotices]   = useState(() => {
@@ -95,7 +95,7 @@ export default function App() {
   const [autoMode, setAutoMode] = useState(() => localStorage.getItem('se_auto') === '1')
   const [extConnected, setExtConnected] = useState(false)
   const [showExtModal, setShowExtModal] = useState(false)
-  const [planoInfo, setPlanoInfo] = useState({ plano: 'free', validade_ate: null, creditos_usados: 0, creditos_limite: 8, trial_usado: false })
+  const [planoInfo, setPlanoInfo] = useState({ plano: 'free', validade_ate: null, creditos_usados: 0, creditos_limite: 6, trial_usado: false })
   const [verificandoPagamento, setVerificandoPagamento] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [showPhoneModal, setShowPhoneModal] = useState(false)
@@ -138,7 +138,7 @@ export default function App() {
     log: autoLog,
     done: autoDone,
     stopAuto,
-  } = useAutoAgent({ tasks, autoMode, extConnected, whatsappPhone })
+  } = useAutoAgent({ tasks, autoMode, extConnected, whatsappPhone, userId: user?.id, accessToken })
 
   const [autoCompleted, setAutoCompleted] = useState(0)
   const prevAutoDone = useRef(null)
@@ -338,8 +338,8 @@ export default function App() {
     } else {
       fetch(`${AGENT_URL}/scheduler/desregistrar`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ userId: user.id, accessToken }),
       }).catch(() => {})
     }
   }, [autoMode, isAuthenticated, tasks.length])
@@ -438,6 +438,7 @@ export default function App() {
         {showPhoneModal && !showOnboarding && (
           <PhoneModal
             userId={user?.id}
+            accessToken={accessToken}
             onSave={(telefone) => {
               setWhatsappPhone(telefone)
               setPhoneInputVal(telefone)
@@ -574,7 +575,7 @@ export default function App() {
             {/* Indicador de créditos */}
             {(() => {
               const usado = planoInfo.creditos_usados || 0
-              const limite = planoInfo.creditos_limite || 8
+              const limite = planoInfo.creditos_limite || 6
               const pct = Math.min(100, Math.round((usado / limite) * 100))
               const esgotado = usado >= limite
               const cor = planoInfo.plano === 'premium' ? '#9c27b0' : planoInfo.plano === 'pro' ? '#1a73e8' : '#e65100'
@@ -702,8 +703,8 @@ export default function App() {
             if (user?.id && phoneInputVal) {
               fetch('https://agente-servidor-production.up.railway.app/usuario/telefone', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: user.id, telefone: phoneInputVal }),
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+                body: JSON.stringify({ userId: user.id, telefone: phoneInputVal, accessToken }),
               }).catch(() => {})
             }
           }}>Salvar</button>
@@ -940,6 +941,7 @@ export default function App() {
                       accessToken={accessToken}
                       solveTaskWithContext={solveTaskWithContext}
                       extConnected={extConnected}
+                      userId={user?.id || null}
                     />
                   </motion.div>
                 ))}
@@ -1076,7 +1078,7 @@ export default function App() {
         )}
         {/* Precos tab */}
         {tab === 'PRECOS' && (
-          <Precos user={user} planoAtual={planoInfo.plano} creditosUsados={planoInfo.creditos_usados || 0} creditosLimite={planoInfo.creditos_limite || 8} trialUsado={planoInfo.trial_usado || false} verificandoPagamento={verificandoPagamento} accessToken={accessToken} onVoltar={() => setTab('ASSIGNED')} />
+          <Precos user={user} planoAtual={planoInfo.plano} creditosUsados={planoInfo.creditos_usados || 0} creditosLimite={planoInfo.creditos_limite || 6} trialUsado={planoInfo.trial_usado || false} verificandoPagamento={verificandoPagamento} accessToken={accessToken} onVoltar={() => setTab('ASSIGNED')} />
         )}
         </AnimatePresence>
 

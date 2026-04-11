@@ -17,7 +17,7 @@ async function notifyWhatsApp(phone, taskTitle, courseName, result) {
   } catch { /* silent */ }
 }
 
-export function useAutoAgent({ tasks, autoMode, extConnected, whatsappPhone }) {
+export function useAutoAgent({ tasks, autoMode, extConnected, whatsappPhone, userId, accessToken }) {
   const [currentTask, setCurrentTask]   = useState(null)
   const [queueSize, setQueueSize]       = useState(0)
   const [processedIds, setProcessedIds] = useState(() => {
@@ -54,7 +54,7 @@ export function useAutoAgent({ tasks, autoMode, extConnected, whatsappPhone }) {
     const task = queueRef.current[0]
     processingRef.current = true
     setCurrentTask(task)
-    runAgent(task, { autoApprove: true })
+    runAgent(task, { autoApprove: true, userId, accessToken })
   }, [running, autoMode, extConnected, runAgent])
 
   // Start processing when conditions are met

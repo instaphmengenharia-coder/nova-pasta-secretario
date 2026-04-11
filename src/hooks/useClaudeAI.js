@@ -3,14 +3,19 @@ import { useState, useCallback } from 'react'
 const CLAUDE_API = 'https://agente-servidor-production.up.railway.app/claude/proxy'
 const MODEL = import.meta.env.VITE_MODEL_SONNET || 'claude-sonnet-4-6'
 
-async function callClaude(prompt) {
+async function callClaude(prompt, userId, accessToken) {
   const res = await fetch(CLAUDE_API, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+    },
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
+      ...(userId ? { userId } : {}),
+      ...(accessToken ? { accessToken } : {}),
     }),
   })
 
@@ -26,7 +31,7 @@ async function callClaude(prompt) {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useClaudeAI() {
+export function useClaudeAI({ userId = null, accessToken = null } = {}) {
   const [dashboardAnalysis, setDashboardAnalysis] = useState(null)
   const [dashboardLoading, setDashboardLoading] = useState(false)
   const [dashboardError, setDashboardError] = useState(null)
@@ -73,14 +78,14 @@ ${list}
 
 Responda em português, de forma amigável e direta, sem listas ou marcadores — apenas texto corrido.`
 
-      const result = await callClaude(prompt)
+      const result = await callClaude(prompt, userId, accessToken)
       setDashboardAnalysis(result)
     } catch (err) {
       setDashboardError(err.message)
     } finally {
       setDashboardLoading(false)
     }
-  }, [])
+  }, [userId, accessToken])
 
   /**
    * Generates a focused analysis for a single task.
@@ -105,8 +110,8 @@ Forneça uma resposta estruturada com:
 
 Responda em português, de forma clara e encorajadora, em no máximo 300 palavras.`
 
-    return callClaude(prompt)
-  }, [])
+    return callClaude(prompt, userId, accessToken)
+  }, [userId, accessToken])
 
   /**
    * Reads the task and generates a complete ready-to-submit answer.
@@ -148,21 +153,24 @@ Crie um plano organizado por dia da semana (de hoje até domingo). Para cada dia
 Use **Dia — data** como cabeçalho de cada dia. Deixe dias sem atividade marcados como "Descanso / revisão livre".
 Seja realista, prático e motivador. Máximo 280 palavras.`
 
-      const result = await callClaude(prompt)
+      const result = await callClaude(prompt, userId, accessToken)
       setWeeklyPlan(result)
     } catch (err) {
       setWeeklyPlanError(err.message)
     } finally {
       setWeeklyPlanLoading(false)
     }
-  }, [])
+  }, [userId, accessToken])
 
   // Resolve with full context: reads attached Docs/PDFs via agente-servidor
   const solveTaskWithContext = useCallback(async (task, accessToken, styleExamples = [], userId, modoCadernoManual) => {
     const SERVER = import.meta.env.VITE_AGENT_SERVER || 'https://agente-servidor-production.up.railway.app'
     const res = await fetch(`${SERVER}/atividade/resolver-url`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+      },
       body: JSON.stringify({
         url: task.alternateLink,
         courseId: task.courseId,
@@ -235,8 +243,8 @@ REGRAS PARA ESCREVER A RESPOSTA:
 
 Escreva APENAS a resposta final, pronta para ser colada no campo de entrega do Google Classroom.`
 
-    return callClaude(prompt)
-  }, [])
+    return callClaude(prompt, userId, accessToken)
+  }, [userId, accessToken])
 
   /**
    * Refines an existing answer based on a user instruction.
@@ -254,8 +262,8 @@ ${instruction}
 Reescreva a resposta aplicando o pedido do aluno. Mantenha o conteúdo correto e o estilo de estudante brasileiro.
 PROIBIDO: Não escreva preâmbulos como "Claro!", "Aqui está:", etc. Retorne APENAS a resposta reescrita, pronta para entregar.`
 
-    return callClaude(prompt)
-  }, [])
+    return callClaude(prompt, userId, accessToken)
+  }, [userId, accessToken])
 
   return {
     analyzePriorities,

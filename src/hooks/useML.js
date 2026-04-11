@@ -10,11 +10,20 @@ const MAX_HISTORY   = 200
 
 // ─── Claude Haiku helper ──────────────────────────────────────────────────────
 
-async function callHaiku(messages, maxTokens = 200) {
+async function callHaiku(messages, maxTokens = 200, userId, accessToken) {
   const res = await fetch('https://agente-servidor-production.up.railway.app/claude/proxy', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: HAIKU_MODEL, max_tokens: maxTokens, messages }),
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify({
+      model: HAIKU_MODEL,
+      max_tokens: maxTokens,
+      messages,
+      ...(userId ? { userId } : {}),
+      ...(accessToken ? { accessToken } : {}),
+    }),
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -56,7 +65,7 @@ function calcPriorityScore(task, difficulty, courseBoosts = {}) {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useML() {
+export function useML({ userId, accessToken } = {}) {
   // difficulty: { [taskId]: 1-5 }
   const [difficulty, setDifficulty] = useState(() => {
     try { return JSON.parse(localStorage.getItem(LS_DIFFICULTY) || '{}') } catch { return {} }
@@ -128,7 +137,7 @@ Description: ${task.description?.slice(0, 300) || 'none'}
 
 Reply with ONLY a single digit 1-5. No other text.`
 
-      const text = await callHaiku([{ role: 'user', content: prompt }], 5)
+      const text = await callHaiku([{ role: 'user', content: prompt }], 5, userId, accessToken)
       const d = parseInt(text.trim().charAt(0), 10)
       saveDifficulty(task.id, d >= 1 && d <= 5 ? d : 3)
     } catch {
@@ -203,7 +212,7 @@ ${lines}
 
 Responda em português.`
 
-      const insights = await callHaiku([{ role: 'user', content: prompt }], 300)
+      const insights = await callHaiku([{ role: 'user', content: prompt }], 300, userId, accessToken)
       savePatterns({ generatedAt: new Date().toISOString(), insights, courseBoosts })
     } catch (err) {
       setPatternsError(err.message)

@@ -19,7 +19,7 @@ async function acquireLock() {
 function releaseLock() { globalAgentLock = false }
 
 // ─── Viability Analysis ───────────────────────────────────────────────────────
-export async function analisarViabilidade(task) {
+export async function analisarViabilidade(task, userId, accessToken) {
   const materiais = task.materials?.length
     ? `Materiais: ${task.materials.map(m => m.title || m.driveFile?.title || 'arquivo').join(', ')}`
     : 'Sem materiais anexados'
@@ -33,10 +33,15 @@ export async function analisarViabilidade(task) {
 
   const res = await fetch(CLAUDE_API, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+    },
     body: JSON.stringify({
       model: MODEL_HAIKU,
       max_tokens: 350,
+      ...(userId ? { userId } : {}),
+      ...(accessToken ? { accessToken } : {}),
       messages: [{
         role: 'user',
         content: `Analisa essa atividade escolar e diz se é possível fazer automaticamente por um agente de IA que controla o Chrome e preenche campos de texto.\n\n${enunciado}\n\nREGRA PRINCIPAL: considere POSSÍVEL a menos que seja fisicamente impossível para um agente digital.\n\nIMPOSSÍVEL (apenas estes casos exatos):\n- Exige foto/selfie/vídeo DO ALUNO como entrega\n- Exige presença física (lab, campo, escola)\n- Enunciado completamente vazio sem nenhuma informação\n\nTUDO O MAIS É POSSÍVEL — atividades de redação, gramática, múltipla escolha, resumo, pesquisa, exercícios de idioma, matemática, formulário online — MESMO que mencione caderno ou livro no enunciado (o agente preenche o campo de resposta no Classroom).\n\nResponde APENAS com JSON válido, sem markdown:\n{"possivel":true,"confianca":"alta","motivo":"explicação em 1-2 frases","precisa_de":[],"estrategia":"como resolver"}`,
@@ -282,16 +287,21 @@ function chooseModel(lastUserMsg) {
 }
 
 // ─── Claude API ───────────────────────────────────────────────────────────────
-async function summarizeOldMessages(_apiKey, messages) {
+async function summarizeOldMessages(_apiKey, messages, userId, accessToken) {
   // Comprime as mensagens mais antigas em um resumo com Haiku
   const toSummarize = messages.slice(0, -4) // mantém últimas 4 intactas
   if (toSummarize.length < 3) return messages
   try {
     const res = await fetch(CLAUDE_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+      },
       body: JSON.stringify({
         model: MODEL_HAIKU, max_tokens: 200,
+        ...(userId ? { userId } : {}),
+        ...(accessToken ? { accessToken } : {}),
         messages: [{ role: 'user', content: `Resuma em 3-4 frases o que o agente fez até agora nesta sessão:\n${toSummarize.map(m => `[${m.role}]: ${String(m.content).slice(0, 150)}`).join('\n')}` }],
       }),
     })
@@ -306,14 +316,14 @@ async function summarizeOldMessages(_apiKey, messages) {
   } catch { return messages }
 }
 
-async function callClaude(_apiKey, messages, systemPrompt, retry = 0) {
+async function callClaude(_apiKey, messages, systemPrompt, retry = 0, userId, accessToken) {
   await acquireLock()
   try {
     // Comprime histórico quando fica longo (>10 mensagens)
     let trimmed = messages
     if (messages.length > 10) {
       releaseLock()
-      trimmed = await summarizeOldMessages(null, messages)
+      trimmed = await summarizeOldMessages(null, messages, userId, accessToken)
       await acquireLock()
     } else if (messages.length > 5) {
       // Sempre preserva a primeira mensagem (contexto da atividade + resposta pré-gerada)
@@ -324,21 +334,28 @@ async function callClaude(_apiKey, messages, systemPrompt, retry = 0) {
     // Proxy Railway — API key nunca vai ao browser
     const res = await fetch(CLAUDE_API, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, max_tokens: 1024, system: systemPrompt, messages: trimmed }),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({
+        model, max_tokens: 1024, system: systemPrompt, messages: trimmed,
+        ...(userId ? { userId } : {}),
+        ...(accessToken ? { accessToken } : {}),
+      }),
     })
     // Rate limit → aguarda e tenta de novo (até 3x, intervalo crescente)
     if (res.status === 429 && retry < 3) {
       releaseLock()
       const wait = (retry + 1) * 20000 // 20s, 40s, 60s
       await new Promise(r => setTimeout(r, wait))
-      return callClaude(null, messages, systemPrompt, retry + 1)
+      return callClaude(null, messages, systemPrompt, retry + 1, userId, accessToken)
     }
     // Erro de servidor temporário → 1 retry
     if ((res.status === 500 || res.status === 529) && retry < 2) {
       releaseLock()
       await new Promise(r => setTimeout(r, 10000))
-      return callClaude(null, messages, systemPrompt, retry + 1)
+      return callClaude(null, messages, systemPrompt, retry + 1, userId, accessToken)
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
@@ -456,7 +473,10 @@ export function useBrowserAgent() {
           addLog('info', '📖 Lendo materiais da atividade antes de abrir o Chrome...')
           const res = await fetch(`${AGENT_URL}/atividade/resolver-url`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(opts.accessToken ? { 'Authorization': `Bearer ${opts.accessToken}` } : {}),
+            },
             body: JSON.stringify({
               url: task.alternateLink,
               courseId: task.courseId,
@@ -529,7 +549,7 @@ export function useBrowserAgent() {
         addLog('thinking', 'Pensando...')
         let aiText
         try {
-          aiText = await callClaude(null, messages, systemPrompt)
+          aiText = await callClaude(null, messages, systemPrompt, 0, opts.userId, opts.accessToken)
         } catch (apiErr) {
           // Erro de API não derruba o agente — pausa e explica
           addLog('error', `⚠️ Erro na API: ${apiErr.message}`)

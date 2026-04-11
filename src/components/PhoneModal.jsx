@@ -12,7 +12,7 @@ function formatarTelefone(valor) {
   return valor
 }
 
-export default function PhoneModal({ userId, onSave, onDismiss }) {
+export default function PhoneModal({ userId, accessToken, onSave, onDismiss }) {
   const [valor, setValor] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
@@ -31,11 +31,11 @@ export default function PhoneModal({ userId, onSave, onDismiss }) {
     const telefone = digits.startsWith('55') ? digits : `55${digits}`
     setSalvando(true)
     try {
-      if (userId) {
+      if (userId && accessToken) {
         await fetch(`${AGENT_URL}/usuario/telefone`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, telefone }),
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+          body: JSON.stringify({ userId, telefone, accessToken }),
         })
       }
     } catch (_) {
