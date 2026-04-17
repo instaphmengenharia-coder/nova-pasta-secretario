@@ -55,25 +55,39 @@ export function useClassroom() {
       setError(`Erro de autenticação: ${response.error}`)
       return
     }
-    try {
-      // Server exchanges code for tokens and stores refresh_token
-      const res = await fetch(`${SERVER}/auth/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: response.code }),
-      })
-      if (!res.ok) {
-        let msg = `Servidor retornou ${res.status}`
-        try { const body = await res.json(); if (body?.erro) msg = body.erro } catch {}
-        throw new Error(msg)
+    setLoading(true)
+    setError(null)
+    const TENTATIVAS = 3
+    for (let tentativa = 1; tentativa <= TENTATIVAS; tentativa++) {
+      try {
+        if (tentativa > 1) {
+          setError(`Servidor iniciando, aguarde… (tentativa ${tentativa}/${TENTATIVAS})`)
+          await new Promise(r => setTimeout(r, 5000))
+        }
+        const res = await fetch(`${SERVER}/auth/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: response.code }),
+        })
+        if (!res.ok) {
+          let msg = `Servidor retornou ${res.status}`
+          try { const body = await res.json(); if (body?.erro) msg = body.erro } catch {}
+          throw new Error(msg)
+        }
+        const { accessToken: token, refreshToken: rToken, userId, name, photo } = await res.json()
+        setError(null)
+        setAccessToken(token)
+        if (rToken) setRefreshToken(rToken)
+        setUser({ id: userId, name, photo })
+        await fetchAllData(token)
+        return
+      } catch (err) {
+        const isNetworkError = err.message === 'Failed to fetch' || err.message.includes('NetworkError')
+        if (isNetworkError && tentativa < TENTATIVAS) continue
+        setError(`Erro ao fazer login: ${err.message}`)
+        setLoading(false)
+        return
       }
-      const { accessToken: token, refreshToken: rToken, userId, name, photo } = await res.json()
-      setAccessToken(token)
-      if (rToken) setRefreshToken(rToken)
-      setUser({ id: userId, name, photo })
-      await fetchAllData(token)
-    } catch (err) {
-      setError(`Erro ao fazer login: ${err.message}`)
     }
   }
 
