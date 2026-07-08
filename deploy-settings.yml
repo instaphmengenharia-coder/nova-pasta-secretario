@@ -1,0 +1,181 @@
+- generic [ref=e4]:
+  - banner [ref=e6]:
+    - generic [ref=e7]:
+      - link "Railway Logo" [ref=e8] [cursor=pointer]:
+        - /url: /dashboard
+        - img "Railway Logo" [ref=e10]
+      - generic [ref=e13]:
+        - button "agente-servidor" [ref=e16] [cursor=pointer]:
+          - generic "joaopaulocosb's Projects" [ref=e60]
+          - generic [ref=e20]: agente-servidor
+          - img [ref=e63]
+        - button "production" [ref=e23] [cursor=pointer]:
+          - generic [ref=e24]: production
+          - img [ref=e26]
+    - navigation [ref=e28]:
+      - generic [ref=e30]:
+        - button "Toggle activity" [ref=e32] [cursor=pointer]:
+          - img [ref=e34]
+        - button [ref=e36] [cursor=pointer]:
+          - img [ref=e39]
+        - button "7 days or $3.28 left" [ref=e66] [cursor=pointer]:
+          - paragraph [ref=e68]:
+            - generic [ref=e69]: 7 days or $3.28 left
+        - button "Agent" [ref=e42] [cursor=pointer]:
+          - img [ref=e44]
+          - text: Agent
+  - generic [ref=e46]:
+    - navigation "Project navigation" [ref=e70]:
+      - generic [ref=e71]:
+        - link "Architecture" [ref=e74] [cursor=pointer]:
+          - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+          - img [ref=e76]
+        - link "Observability" [ref=e82] [cursor=pointer]:
+          - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/observability?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+          - img [ref=e84]
+        - link "Logs" [ref=e87] [cursor=pointer]:
+          - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/logs?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+          - img [ref=e89]
+        - link "Settings" [ref=e93] [cursor=pointer]:
+          - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/settings?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+          - img [ref=e95]
+      - button [ref=e98] [cursor=pointer]:
+        - generic "joaopaulocosb@gmail.com" [ref=e100]
+    - region [ref=e51]:
+      - generic [ref=e52]:
+        - generic [ref=e105]:
+          - img [ref=e106]
+          - generic [ref=e107]:
+            - generic [ref=e109]:
+              - generic:
+                - img
+                - generic:
+                  - button "Postgres Online postgres-volume" [ref=e110]:
+                    - generic [ref=e111]
+                  - button "agente-servidor agente-servidor-production.up.railway.app Online" [ref=e132]:
+                    - link "agente-servidor agente-servidor-production.up.railway.app Online" [ref=e135] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/bff18523-80a2-47c5-a3a3-8694a4419a20/settings?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+                  - button "evolution-api evolution-api-production-6461.up.railway.app Completed" [ref=e149]:
+                    - link "evolution-api evolution-api-production-6461.up.railway.app Completed" [ref=e152] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+            - toolbar "Canvas options" [ref=e169]:
+              - button "Canvas settings" [ref=e170] [cursor=pointer]:
+                - img [ref=e172]
+              - group "canvas action" [ref=e182]:
+                - button "Zoom in" [ref=e183] [cursor=pointer]:
+                  - img [ref=e185]
+                - button "Zoom out" [ref=e187] [cursor=pointer]:
+                  - img [ref=e189]
+                - button "Center canvas" [ref=e190] [cursor=pointer]:
+                  - img [ref=e192]
+              - group "canvas action" [ref=e197]:
+                - button "Undo" [ref=e198] [cursor=pointer]:
+                  - img [ref=e200]
+                - button "Redo" [ref=e203] [cursor=pointer]:
+                  - img [ref=e205]
+              - button "Visibility layers" [ref=e208] [cursor=pointer]:
+                - img [ref=e210]
+            - img [ref=e212]
+        - generic [ref=e215]:
+          - generic [ref=e216]:
+            - generic [ref=e217]:
+              - generic [ref=e219]:
+                - button [ref=e220] [cursor=pointer]:
+                  - img [ref=e222]
+                - heading "evolution-api" [level=1] [ref=e225]:
+                  - button "evolution-api" [ref=e226] [cursor=pointer]
+              - link [ref=e228] [cursor=pointer]:
+                - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+                - img [ref=e230]
+            - generic [ref=e232]:
+              - link "Deployments" [ref=e233] [cursor=pointer]:
+                - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+                - generic [ref=e234]: Deployments
+              - link "Variables" [ref=e235] [cursor=pointer]:
+                - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/variables?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+                - generic [ref=e236]: Variables
+              - link "Metrics" [ref=e237] [cursor=pointer]:
+                - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/metrics?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+                - generic [ref=e238]: Metrics
+              - link "Settings" [ref=e239] [cursor=pointer]:
+                - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings?environmentId=4b0bdade-f58b-4524-aedc-ee9ef222a392
+                - generic [ref=e240]: Settings
+          - generic [ref=e244]:
+            - generic [ref=e246]:
+              - generic [ref=e247]:
+                - generic [ref=e248]: Filter settings
+                - textbox "Filter settings" [ref=e250]:
+                  - /placeholder: Filter Settings...
+              - button / [ref=e634] [cursor=pointer]:
+                - generic [ref=e635]: /
+            - generic [ref=e253]:
+              - generic [ref=e254]:
+                - generic [ref=e636]:
+                  - img [ref=e638]
+                  - heading "Source" [level=1] [ref=e640]
+                  - generic [ref=e642]:
+                    - link "Source Image" [ref=e644] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings/#source-image
+                    - generic [ref=e646]
+                - generic [ref=e664]:
+                  - img [ref=e666]
+                  - heading "Networking" [level=1] [ref=e672]
+                  - generic [ref=e673]:
+                    - generic [ref=e674]
+                    - generic [ref=e726]
+                - generic [ref=e753]:
+                  - img [ref=e755]
+                  - heading "Scale" [level=1] [ref=e758]
+                  - generic [ref=e759]:
+                    - generic [ref=e760]
+                    - generic [ref=e800]
+                - generic [ref=e833]:
+                  - img [ref=e835]
+                  - heading "Build" [level=1] [ref=e838]
+                  - generic [ref=e840]:
+                    - generic [ref=e841]
+                    - generic [ref=e847]
+                - generic [ref=e470]:
+                  - img [ref=e472]
+                  - heading "Deploy" [level=1] [ref=e474]
+                  - generic [ref=e475]:
+                    - generic [ref=e476]
+                    - generic [ref=e851]
+                    - generic [ref=e862]
+                    - generic [ref=e871]
+                    - generic [ref=e881]
+                    - generic [ref=e891]
+                - generic [ref=e921]:
+                  - img [ref=e923]
+                  - heading "Feature-flags" [level=1] [ref=e925]
+                  - generic [ref=e930]:
+                    - switch "Skipped Builds Skips the build step when the same source code was already built in a previous deployment. GitHub only. Learn more" [ref=e931] [cursor=pointer]
+                    - generic [ref=e934] [cursor=pointer]
+                - generic [ref=e938]:
+                  - img [ref=e940]
+                  - generic [ref=e943]:
+                    - generic [ref=e944]
+                    - button "Delete service" [ref=e948] [cursor=pointer]
+              - complementary [ref=e592]:
+                - list [ref=e593]:
+                  - listitem [ref=e950]:
+                    - link "Source" [ref=e951] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings/#source
+                  - listitem [ref=e952]:
+                    - link "Networking" [ref=e953] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings/#networking
+                  - listitem [ref=e954]:
+                    - link "Scale" [ref=e955] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings/#scale
+                  - listitem [ref=e956]:
+                    - link "Build" [ref=e957] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings/#build
+                  - listitem [ref=e602]:
+                    - link "Deploy" [ref=e603] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings/#deploy
+                  - listitem [ref=e958]:
+                    - link "Feature-flags" [ref=e959] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings/#feature-flags
+                  - listitem [ref=e960]:
+                    - link "Danger" [ref=e961] [cursor=pointer]:
+                      - /url: /project/06c11a5c-ec0a-4bdf-a98d-15b003f909e5/service/112cc098-6c13-42e4-bbfe-7f697dd06f58/settings/#danger

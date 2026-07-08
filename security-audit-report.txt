@@ -1,0 +1,8 @@
+Security Audit Report
+Gerado: Fri Apr 17 09:59:53     2026
+Diretório: C:/Users/joaop/Nova pasta
+
+================================================
+ACHADOS + EXPLICAÇÕES
+================================================
+
